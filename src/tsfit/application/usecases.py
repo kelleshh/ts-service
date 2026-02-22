@@ -8,12 +8,13 @@ import uuid
 from tsfit.application.ports import (
     TrainingRunRepository,
     DatasetParser,
-    SupervisedDatasetBuilder,
+    TimeSeriesDatasetBuilder,
     ModelTrainer,
+    BuiltDataset,
 )
 from tsfit.domain.errors import IdempotencyConflict, TrainingFailed
 from tsfit.domain.training_run import TrainingRun, RunStatus
-from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig
+from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig, TrainingConfig
 from tsfit.domain.validation import validate_rows_have_columns
 
 
@@ -25,7 +26,7 @@ class TrainModelRequest:
     dataset_rows: list[dict[str, Any]]
     dataset_schema: DatasetSchema
     time_series: TimeSeriesConfig
-    params: dict[str, Any]
+    training: TrainingConfig
     idempotency_key: str | None = None
 
 
@@ -58,7 +59,7 @@ def _hash_payload(req: TrainModelRequest) -> str:
         'dataset_rows': rows,
         'dataset_schema': asdict(req.dataset_schema),
         'time_series': asdict(req.time_series),
-        'params': req.params,
+        'training': asdict(req.training),
         'payload_version': 1,
     }
     raw = json.dumps(
@@ -78,7 +79,7 @@ class TrainModelUseCase:
         self,
         repo: TrainingRunRepository,
         parser: DatasetParser,
-        builder: SupervisedDatasetBuilder,
+        builder: TimeSeriesDatasetBuilder,
         trainer: ModelTrainer,
         id_gen: Callable[[], str] | None = None,
         clock: Callable[[], datetime] | None = None,
@@ -95,6 +96,7 @@ class TrainModelUseCase:
         # простые доменные проверки (инварианты)
         req.dataset_schema.validate()
         req.time_series.validate()
+        req.training.validate()
         validate_rows_have_columns(req.dataset_rows, req.dataset_schema)
 
         payload_hash = _hash_payload(req)
@@ -133,23 +135,18 @@ class TrainModelUseCase:
             frame = self.parser.parse(req.dataset_rows, req.dataset_schema)
 
             # сплит
-            X_tr, y_tr, X_va, y_va, feature_names = self.builder.build_train_valid(
+            built: BuiltDataset = self.builder.build_train_valid(
                 frame=frame,
                 schema=req.dataset_schema,
                 cfg=req.time_series,
             )
 
             # обучить и оценить метрики
-            result = self.trainer.train_and_eval(
-                X_train=X_tr,
-                y_train=y_tr,
-                X_valid=X_va,
-                y_valid=y_va,
-                params=req.params,
-            )
+            result = self.trainer.train_and_eval(dataset=built, training=req.training)
+
 
             # результат
-            result.setdefault('feature_names', feature_names)
+            result.setdefault('feature_names', built.feature_names)
             run.mark_done(result=result)
             self.repo.save(run)
 

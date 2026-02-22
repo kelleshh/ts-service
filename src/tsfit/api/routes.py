@@ -27,7 +27,7 @@ async def fit(
             dataset_rows=req.dataset,
             dataset_schema=req.dataset_schema.to_domain(),
             time_series=req.ts.to_domain(),
-            params=req.params,
+            training=req.training.to_domain(),
             idempotency_key=req.idempotency_key,
         )
         result = await run_in_threadpool(uc.execute, usecase_req)

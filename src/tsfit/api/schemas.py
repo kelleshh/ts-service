@@ -1,7 +1,14 @@
 from pydantic import BaseModel, Field
 from typing import Any
 
-from tsfit.domain.spec import DatasetSchema, FeatureSpec, TimeSeriesConfig, SplitConfig
+from tsfit.domain.spec import (
+    DatasetSchema, 
+    FeatureSpec, 
+    TimeSeriesConfig, 
+    SplitConfig,
+    TrainingConfig,
+    TuningConfig,
+)
 from tsfit.domain.training_run import RunStatus
 
 
@@ -23,12 +30,18 @@ class FeatureSpecDTO(BaseModel):
     lags: list[int] = Field(min_length=1)
     rolling_mean_windows: list[int] = Field(default_factory=list)
     rolling_std_windows: list[int] = Field(default_factory=list)
+    rolling_min_windows: list[int] = Field(default_factory=list)
+    rolling_max_windows: list[int] = Field(default_factory=list)
+    diff_lags: list[int] = Field(default_factory=list)
     
     def to_domain(self) -> FeatureSpec:
         return FeatureSpec(
             lags=self.lags,
             rolling_mean_windows=self.rolling_mean_windows,
-            rolling_std_windows=self.rolling_std_windows,)
+            rolling_std_windows=self.rolling_std_windows,
+            rolling_min_windows=self.rolling_min_windows,
+            rolling_max_windows=self.rolling_max_windows,
+            diff_lags=self.diff_lags,)
     
 
 class SplitConfigDTO(BaseModel):
@@ -53,13 +66,41 @@ class TimeSeriesConfigDTO(BaseModel):
             features=self.features.to_domain(),
             split=self.split.to_domain(),
         )
+    
+class TuningConfigDTO(BaseModel):
+    enabled: bool = False
+    n_trials: int = 20
+    timeout_sec: int | None = 60
+    early_stopping_rounds: int = 50
+
+    def to_domain(self) -> TuningConfig:
+        return TuningConfig(
+            enabled=self.enabled,
+            n_trials=self.n_trials,
+            timeout_sec=self.timeout_sec,
+            early_stopping_rounds=self.early_stopping_rounds,
+        )
+    
+class TrainingConfigDTO(BaseModel):
+    xgb_params: dict[str, Any] = Field(default_factory=dict)
+    metrics: list[str] = Field(default_factory=lambda: ['rmse', 'mae'])
+    primary_metric: str = 'rmse'
+    tuning: TuningConfigDTO = Field(default_factory=TuningConfigDTO)
+
+    def to_domain(self) -> TrainingConfig:
+        return TrainingConfig(
+            xgb_params=self.xgb_params,
+            metrics=self.metrics,
+            primary_metric=self.primary_metric,
+            tuning=self.tuning.to_domain(),
+        )
 
 
 class FitRequest(BaseModel):
     dataset: list[dict[str, Any]]
     dataset_schema: DatasetSchemaDTO
     ts: TimeSeriesConfigDTO
-    params: dict[str, Any] = Field(default_factory=dict)
+    training: TrainingConfigDTO = Field(default_factory=TrainingConfigDTO)
     idempotency_key: str | None = None
 
 
