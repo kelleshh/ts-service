@@ -32,19 +32,27 @@ class DatasetSchema:
 class FeatureSpec:
     '''
     Спецификация для генерации признаков
+    !!!: скользящие статистики считаются только по прошлым значениям
     '''
     lags: list[int]
+    rolling_mean_windows: list[int]
+    rolling_std_windows: list[int]
     # TODO: добавить другие фичи!
 
     def validate(self) -> None:
+        def _validate_pos_int_list(name: str, values: list[int]) -> None:
+            if any((not isinstance(v, int)) for v in values):
+                raise ValidationError(f'{name} должен быть списком целых чисел')
+            if any(v <= 0 for v in values):
+                raise ValidationError(f'{name} должен содержать только числа > 0')
+            if len(set(values)) != len(values):
+                raise ValidationError(f'{name} не должен содержать дубликаты')
         if not self.lags:
             raise ValidationError('lags должен быть не пустым')
-        if any((not isinstance(l, int)) for l in self.lags):
-            raise ValidationError('lags должен быть списком целых чисел')
-        if any(l <= 0 for l in self.lags):
-            raise ValidationError('lags должен содержать только числа > 0')
-        if len(set(self.lags)) != len(self.lags):
-            raise ValidationError('lags не должен содержать дубликаты')
+        _validate_pos_int_list('lags', self.lags)
+
+        _validate_pos_int_list('rolling_mean_windows', self.rolling_mean_windows)
+        _validate_pos_int_list('rolling_std_windows', self.rolling_std_windows)
 
 
 @dataclass(frozen=True)
@@ -76,15 +84,3 @@ class TimeSeriesConfig:
         self.features.validate() # валидируем фичи
         self.split.validate() # валидируем сплиты
         
-
-
-'''
-в домене должны быть (я не знаю что тут избыточно, что уже реализовано а чего реально не хватает):
-1) сущности (entity): туда надо добавить:
-- TimeSeries (сам временной ряд) (series_id, entity_id, timezone, native_frequency, granularity: bool, правила допустимых пропусков хз что это значит я переписываю под диктовку)
-- TimeGrid (сетка времени) (grid_frequency, start ?, end ?, функция генерации идеальной сетки timestamps)
-- Signal (фича источник) (role: target или feature)
-- ResamplingSpec (спецификация приведения частоты) (from_frequency -> to_frequency, method (agg, ffill, asof-join, interpolation запрещено разрешено), allowed_aggregations, missiong_policy 9fill, zero, keep nan, flag)
-- FeatureSpec (список фичей) Каждая фича знает из какого Signal она и как ресемплится
-- DatasetVersion (dataset_id, time_window, grid_frequency, чексумма входа)
-'''

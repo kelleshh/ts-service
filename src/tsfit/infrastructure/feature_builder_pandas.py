@@ -6,11 +6,11 @@ from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig
 from tsfit.domain.errors import ValidationError
 
 
-class PandasSupervisedDatasetBuilder(SupervisedDatasetBuilder):
+class PandasSupervisedDatasetBuilder(SupervisedDatasetBuilder): # возможно стоит это переименовать в более понятное
     '''
     Билдер датасета для обучения модели:
     1) Сначала определяет валидационную часть датасета по времени
-    2) Строит признаки (лаги и тд) и таргет y(t+h)
+    2) Строит признаки (лаги, скользящее среднее и стандартное отклонение) и таргет y(t+h)
     3) Берет train/valid так чтобы в train не попадали примеры, у которых y(t+h) находится в валидационной части
     а в valid попадали
     '''
@@ -27,6 +27,8 @@ class PandasSupervisedDatasetBuilder(SupervisedDatasetBuilder):
         sid_col = schema.series_id_col
 
         lags = sorted(set(cfg.features.lags))
+        rolling_mean_windows = sorted(set(cfg.features.rolling_mean_windows))
+        rolling_std_windows = sorted(set(cfg.features.rolling_std_windows))
         h = cfg.horizon
 
         df = frame.copy()
@@ -58,10 +60,13 @@ class PandasSupervisedDatasetBuilder(SupervisedDatasetBuilder):
             min_len = n
 
         max_lag = int(max(lags))
+        max_roll = int(max([*rolling_mean_windows, *rolling_std_windows], default=0))
+        max_history = max(max_lag, max_roll)
+
         if min_len <= h:
             raise ValidationError('Данных недостаточно: min_len <= horizon (в одной из серий)')
-        if max_lag >= (min_len - h):
-            raise ValidationError('max_lag слишком большой для min_len и horizon')
+        if max_history >= (min_len - h):
+            raise ValidationError('Слишком большая глубина истории (lags/rolling) для min_len и horizon')
 
         # строит таргет y(t+h)
         if sid_col:
@@ -84,6 +89,28 @@ class PandasSupervisedDatasetBuilder(SupervisedDatasetBuilder):
                 df[col] = df.groupby(sid_col)[tgt_col].shift(lag)
             else:
                 df[col] = df[tgt_col].shift(lag)
+            feature_cols.append(col)
+
+        
+        # скользящие признаки по таргету (строго по прошлому, поэтому shift(1))
+        for win in rolling_mean_windows:
+            col = f'rolling_mean_{win}'
+            if sid_col:
+                df[col] = df.groupby(sid_col)[tgt_col].transform(
+                    lambda s: s.shift(1).rolling(window=win, min_periods=win).mean()
+                )
+            else:
+                df[col] = df[tgt_col].shift(1).rolling(window=win, min_periods=win).mean()
+            feature_cols.append(col)
+
+        for win in rolling_std_windows:
+            col = f'rolling_std_{win}'
+            if sid_col:
+                df[col] = df.groupby(sid_col)[tgt_col].transform(
+                    lambda s: s.shift(1).rolling(window=win, min_periods=win).std(ddof=0)
+                )
+            else:
+                df[col] = df[tgt_col].shift(1).rolling(window=win, min_periods=win).std(ddof=0)
             feature_cols.append(col)
 
         # экзогены

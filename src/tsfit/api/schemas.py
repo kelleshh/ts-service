@@ -21,9 +21,14 @@ class DatasetSchemaDTO(BaseModel):
     
 class FeatureSpecDTO(BaseModel):
     lags: list[int] = Field(min_length=1)
+    rolling_mean_windows: list[int] = Field(default_factory=list)
+    rolling_std_windows: list[int] = Field(default_factory=list)
     
     def to_domain(self) -> FeatureSpec:
-        return FeatureSpec(lags=self.lags)
+        return FeatureSpec(
+            lags=self.lags,
+            rolling_mean_windows=self.rolling_mean_windows,
+            rolling_std_windows=self.rolling_std_windows,)
     
 
 class SplitConfigDTO(BaseModel):
