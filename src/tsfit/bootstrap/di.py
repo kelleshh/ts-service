@@ -12,7 +12,7 @@ from tsfit.application.usecases import TrainModelUseCase, GetRunUseCase
 from tsfit.infrastructure.store_inmemory import InMemoryTrainingRunRepository
 from tsfit.infrastructure.feature_builder_pandas import PandasSupervisedDatasetBuilder
 from tsfit.infrastructure.dataset_parser_pandas import PandasDatasetParser
-from tsfit.infrastructure.trainger_xgb import XGBModelTrainer
+from tsfit.infrastructure.trainer_xgb import XGBModelTrainer
 
 
 class AppProvider(Provider):

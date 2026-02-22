@@ -2,6 +2,7 @@ from typing import Any
 
 import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+# TODO: сделать так чтобы пользователь прямо в конфиге мог указывать метрику ну и соответственно в домене инварианты сделать валидации внести во все обьекты это поле и донести до этого места где автоматически реализовать подсчет именно по пользовательской ошибке
 
 from xgboost import XGBRegressor
 
@@ -20,7 +21,7 @@ class XGBModelTrainer(ModelTrainer):
 
         user_params = dict(params or {})
 
-        # базовые гиперы # TODO: сделать через optuna!
+        # базовые гиперы # TODO: сделать подбор гиперпараметров через optuna (вынести в отдельный файл)
         defaults: dict[str, Any] = {
             "objective": "reg:squarederror",
             "n_estimators": 500,
