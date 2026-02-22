@@ -8,6 +8,7 @@ from fastapi import (
 )
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
+from starlette.concurrency import run_in_threadpool # чтобы не блокировать event loop при выполнении usecase по обучению модели
 
 from tsfit.api.schemas import FitRequest, FitResponse
 from tsfit.application.usecases import TrainModelUseCase, TrainModelRequest, GetRunUseCase
@@ -29,7 +30,7 @@ async def fit(
             params=req.params,
             idempotency_key=req.idempotency_key,
         )
-        result = uc.execute(usecase_req)
+        result = await run_in_threadpool(uc.execute, usecase_req)
 
     except IdempotencyConflict as e:
         raise HTTPException(status_code=s.HTTP_409_CONFLICT, detail=str(e))
