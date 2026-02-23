@@ -15,7 +15,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title='XGBoost Time Series train API',
         description='Сервис для обучения XGBoost на временных рядах',
-        version='0.1.0',
+        version='0.1.1',
         lifespan=lifespan
     )
     app.include_router(tsfit_router)

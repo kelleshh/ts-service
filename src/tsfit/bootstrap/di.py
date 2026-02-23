@@ -4,15 +4,15 @@ from dishka.integrations.fastapi import FastapiProvider
 from tsfit.application.ports import (
     TrainingRunRepository,
     DatasetParser,
-    SupervisedDatasetBuilder,
+    TimeSeriesDatasetBuilder,
     ModelTrainer,
 )
 from tsfit.application.usecases import TrainModelUseCase, GetRunUseCase
 
-from tsfit.infrastructure.store_inmemory import InMemoryTrainingRunRepository
-from tsfit.infrastructure.feature_builder_pandas import PandasSupervisedDatasetBuilder
-from tsfit.infrastructure.dataset_parser_pandas import PandasDatasetParser
-from tsfit.infrastructure.trainer_xgb import XGBModelTrainer
+from tsfit.infrastructure.store.repository_inmemory import InMemoryTrainingRunRepository
+from tsfit.infrastructure.dataset.builder_polars import PolarsTimeSeriesDatasetBuilder
+from tsfit.infrastructure.dataset.parser_polars import PolarsDatasetParser
+from tsfit.infrastructure.training.trainer_xgb import XGBModelTrainer
 
 
 class AppProvider(Provider):
@@ -22,11 +22,11 @@ class AppProvider(Provider):
 
     @provide(scope=Scope.APP)
     def parser(self) -> DatasetParser:
-        return PandasDatasetParser()
+        return PolarsDatasetParser()
 
     @provide(scope=Scope.APP)
-    def builder(self) -> SupervisedDatasetBuilder:
-        return PandasSupervisedDatasetBuilder()
+    def builder(self) -> TimeSeriesDatasetBuilder:
+        return PolarsTimeSeriesDatasetBuilder()
 
     @provide(scope=Scope.APP)
     def trainer(self) -> ModelTrainer:
@@ -37,7 +37,7 @@ class AppProvider(Provider):
         self,
         repo: TrainingRunRepository,
         parser: DatasetParser,
-        builder: SupervisedDatasetBuilder,
+        builder: TimeSeriesDatasetBuilder,
         trainer: ModelTrainer,
     ) -> TrainModelUseCase:
         return TrainModelUseCase(repo=repo, parser=parser, builder=builder, trainer=trainer)
