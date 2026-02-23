@@ -93,18 +93,14 @@ class TimeSeriesConfigValueObject:
 @dataclass(frozen=True)
 class TuningConfigValueObject:
     '''
-    Настройки опционального подбора гиперпараметров.
+    Настройки опционального подбора гиперпараметров
     '''
 
-    enabled: bool = False
     n_trials: int = 20
     timeout_sec: int | None = 60
-    early_stopping_rounds: int = 50
+    early_stopping_rounds: int = 50 #  TODO: что то сделать с этим багом что нет такого параметра в XGBoost! (предполагаю что надо удалить нафиг)
 
     def validate(self) -> None:
-        if not isinstance(self.enabled, bool):
-            raise ValidationError('tuning.enabled должен быть bool')
-
         if not isinstance(self.n_trials, int) or self.n_trials <= 0:
             raise ValidationError('tuning.n_trials должен быть целым числом > 0')
         if self.n_trials > 50:
@@ -125,13 +121,12 @@ class TuningConfigValueObject:
 @dataclass(frozen=True)
 class TrainingConfigValueObject:
     '''
-    Конфиг обучения модели (про обучение как процесс)
+    Конфиг обучения модели по фиксированному набору параметров
     '''
 
     xgb_params: dict[str, Any] = field(default_factory=dict)
-    metrics: list[str] = field(default_factory=lambda: ['rmse', 'mae'])
+    metrics: list[str] = field(default_factory=lambda: ['rmse', 'mae']) # TODO: добавить поддержку всех метрик тут
     primary_metric: str = 'rmse'
-    tuning: TuningConfigValueObject = field(default_factory=TuningConfigValueObject)
 
     def validate(self) -> None:
         if not isinstance(self.xgb_params, dict) or any(not isinstance(k, str) for k in self.xgb_params.keys()):
@@ -153,5 +148,19 @@ class TrainingConfigValueObject:
         if self.primary_metric not in self.metrics:
             raise ValidationError('primary_metric должен входить в metrics')
 
-        self.tuning.validate() # валидируем здесь tuning конфиг тк он вложен
-        
+
+        allowed = {'rmse', 'mae'} # TODO: добавить поддержку всех метрик тут (сам список можно вынести в доменный слой, ведь это часть домена?)
+        if not isinstance(self.metrics, list) or not self.metrics:
+            raise ValidationError('metrics должен быть непустым списком')
+        if any((not isinstance(m, str)) for m in self.metrics):
+            raise ValidationError('metrics должен быть списком строк')
+        if len(set(self.metrics)) != len(self.metrics):
+            raise ValidationError('metrics не должен содержать дубликаты')
+        unknown = [m for m in self.metrics if m not in allowed]
+        if unknown:
+            raise ValidationError(f'metrics содержит неизвестные метрики: {unknown}. Допустимо: {sorted(allowed)}')
+
+        if self.primary_metric not in allowed:
+            raise ValidationError(f'primary_metric должен быть одной из {sorted(allowed)}')
+        if self.primary_metric not in self.metrics:
+            raise ValidationError('primary_metric должен входить в metrics')
