@@ -60,3 +60,26 @@ class ModelTrainer(Protocol):
     ) -> dict[str, Any]:
         '''Обучает модель и возвращает результат (метрики и тд)'''
         ...
+
+
+class HyperparameterTuner(Protocol):
+    '''
+    Порт для подбора гиперпараметров (например через optuna)
+
+    application слой знает только про сам факт подбора и контракт вход/выход
+    конкретная библиотека (optuna) живет в инфраструктуре
+    '''
+
+    def tune(
+        self,
+        dataset: BuiltDataset,
+        base_params: dict[str, Any],
+        primary_metric: str,
+        tuning: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        '''
+        Возвращает:
+        - best_params: словарь параметров, которые нужно ДОБАВИТЬ/ПЕРЕОПРЕДЕЛИТЬ в base_params
+        - report: короткий отчет о подборе (можно сохранять в run.result)
+        '''
+        ...
