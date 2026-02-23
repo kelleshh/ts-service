@@ -17,7 +17,7 @@ from tsfit.domain.entities import TrainingRunEntity, RunStatus
 from tsfit.domain.value_objects import (
     DatasetSchemaValueObject, 
     TimeSeriesConfigValueObject, 
-    TrainingConfigValueObject
+    TrainingConfigValueObject,
     )
 from tsfit.domain.rules import rule_validate_rows_have_columns
 
@@ -170,13 +170,4 @@ class TrainModelUseCase:
         
 
 
-class GetRunUseCase:
-    '''
-    Сценарий для получения информации о runе по его айди
-    '''
-    def __init__(self, repo: TrainingRunRepository) -> None:
-        self.repo = repo
-
-    def execute(self, run_id: str) -> TrainingRunEntity | None:
-        return self.repo.get(run_id)
     
