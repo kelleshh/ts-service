@@ -55,7 +55,7 @@ def tune_xgb_params(
             y_train,
             eval_set=[(X_valid, y_valid)],
             verbose=False,
-            early_stopping_rounds=early_stopping_rounds,
+            early_stopping_rounds=early_stopping_rounds, # TODO: пофиксить тут баг
         )
         pred = model.predict(X_valid)
         return score(np.asarray(y_valid), np.asarray(pred))

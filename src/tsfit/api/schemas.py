@@ -83,7 +83,7 @@ class TuningConfigDTO(BaseModel):
     
 class TrainingConfigDTO(BaseModel):
     xgb_params: dict[str, Any] = Field(default_factory=dict)
-    metrics: list[str] = Field(default_factory=lambda: ['rmse', 'mae'])
+    metrics: list[str] = Field(default_factory=lambda: ['rmse', 'mae']) # TODO: сделать поддержку всех метрик, доступных в xgboost
     primary_metric: str = 'rmse'
     tuning: TuningConfigDTO = Field(default_factory=TuningConfigDTO)
 

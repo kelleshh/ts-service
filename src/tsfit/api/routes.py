@@ -17,7 +17,7 @@ from tsfit.domain.exceptions import IdempotencyConflict, ValidationError, Traini
 router = APIRouter(route_class=DishkaRoute)
 
 @router.post('/fit', response_model=FitResponse)
-async def fit(
+async def fit( # TODO: сделать асинхронное обучение с передачй обучения в очередь background job
     req: FitRequest,
     response: Response,
     uc: FromDishka[TrainModelUseCase],
@@ -84,3 +84,8 @@ async def get_run_result(
         'run_id': run.run_id,
         'result': run.result,
     }
+
+
+# TODO: сделать инференс-эндпоинт который только выдает предсказания
+
+# TODO: сохранять модели в пул куда-то в mlflow или где то еще, и чтобы их можно было достать на инференсе

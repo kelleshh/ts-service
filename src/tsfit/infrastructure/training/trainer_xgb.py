@@ -111,3 +111,6 @@ class XGBModelTrainer(ModelTrainer):
         if tuning_report is not None:
             out['tuning'] = tuning_report
         return out
+    
+
+    # TODO: почему то метрики ужасные. на вторник: надо полностью пересмотреть все что я тут нагородил
