@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Sequence
 
-import numpy as np
 import polars as pl
 
 from tsfit.application.ports import BuiltDataset, Frame, TimeSeriesDatasetBuilder
@@ -12,9 +11,6 @@ from tsfit.domain.exceptions import ValidationError
 class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
     '''
     Превращает временной ряд в supervised-таблицу (вида X, y)
-
-    Последовательно делает:
-    - 
     '''
 
     def build_train_valid(self, 
