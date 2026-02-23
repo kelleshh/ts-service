@@ -10,18 +10,35 @@ from fastapi import (
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from starlette.concurrency import run_in_threadpool # чтобы не блокировать event loop при выполнении usecase по обучению модели
 
-from tsfit.api.schemas import FitRequest, FitResponse
-from tsfit.application.usecases import TrainModelUseCase, TrainModelRequest, GetRunUseCase
+from tsfit.api.schemas import (
+    FitRequest, 
+    FitResponse,
+    FitAutoRequest,
+    FitAutoResponse
+)
+from tsfit.application.usecases.fit_usecase import (
+    TrainModelUseCase, 
+    TrainModelRequest, 
+)
+from tsfit.application.usecases.autofit_usecase import (
+    TrainModelAutoUseCase,
+    TrainModelAutoRequest,
+)
+from tsfit.application.usecases.get_usecase import GetRunUseCase
+
 from tsfit.domain.exceptions import IdempotencyConflict, ValidationError, TrainingFailed
 
 router = APIRouter(route_class=DishkaRoute)
 
 @router.post('/fit', response_model=FitResponse)
-async def fit( # TODO: сделать асинхронное обучение с передачй обучения в очередь background job
+async def fit( 
     req: FitRequest,
     response: Response,
     uc: FromDishka[TrainModelUseCase],
 ) -> FitResponse:
+    '''
+    Обучение модели по фиксированным параметрам без использования автотюнинга
+    '''
     try:
         usecase_req = TrainModelRequest(
             dataset_rows=req.dataset,
@@ -48,6 +65,44 @@ async def fit( # TODO: сделать асинхронное обучение с
         status=result.status,
         created=result.created,
         metrics=result.metrics,
+    )
+
+
+@router.post('/fit_auto', response_model=FitAutoResponse)
+async def fit_auto(
+    req: FitAutoRequest,
+    response: Response,
+    uc: FromDishka[TrainModelAutoUseCase],
+) -> FitAutoResponse:
+    '''
+    Обучение модели с автоподбором гиперпараметров
+    '''
+    try:
+        usecase_req = TrainModelAutoRequest(
+            dataset_rows=req.dataset,
+            dataset_schema=req.dataset_schema.to_domain(),
+            time_series=req.ts.to_domain(),
+            training=req.training.to_domain(),
+            tuning=req.tuning.to_domain(),
+            idempotency_key=req.idempotency_key,
+        )
+        result = await run_in_threadpool(uc.execute, usecase_req)
+
+    except IdempotencyConflict as e:
+        raise HTTPException(status_code=s.HTTP_409_CONFLICT, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=s.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
+    except TrainingFailed as e:
+        raise HTTPException(status_code=s.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    response.status_code = s.HTTP_201_CREATED if result.created else s.HTTP_200_OK
+
+    return FitAutoResponse(
+        run_id=result.run_id,
+        status=result.status,
+        created=result.created,
+        metrics=result.metrics,
+        tuning=result.tuning,
     )
 
 
