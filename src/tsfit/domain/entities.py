@@ -9,6 +9,7 @@ class RunStatus(str, Enum):
     '''
     Статусы запуска
     '''
+    # TODO: добавить QUEUED
     PENDING = 'PENDING'
     RUNNING = 'RUNNING'
     DONE = 'DONE'

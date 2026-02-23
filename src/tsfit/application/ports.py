@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from typing import Protocol, Any
 
-from tsfit.domain.entites import TrainingRunEntity
+from tsfit.domain.entities import TrainingRunEntity
 from tsfit.domain.value_objects import DatasetSchemaValueObject, TimeSeriesConfigValueObject
 
 Frame = Any # application не должен знать про pandas/polars и pl.DataFrame/pd.DataFrame
