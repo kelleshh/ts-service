@@ -46,7 +46,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
         if sid_col:
             # колонки индексов внутри серии и длина серии
             df = df.with_columns(
-                pl.cum_count().over(sid_col).alias('_row_in_series'),
+                (pl.col(ts_col).cum_count().over(sid_col) - pl.lit(1)).cast(pl.Int64).alias('_row_in_series'),
                 pl.len().over(sid_col).alias('_len_series'),
             )
             n_valid = (
