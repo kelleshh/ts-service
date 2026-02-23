@@ -12,7 +12,7 @@ from tsfit.application.ports import (
     ModelTrainer,
     BuiltDataset,
 )
-from tsfit.domain.exceptions import IdempotencyConflict, TrainingFailed
+from tsfit.domain.exceptions import IdempotencyConflict, TrainingFailed, ValidationError
 from tsfit.domain.entities import TrainingRunEntity, RunStatus
 from tsfit.domain.value_objects import (
     DatasetSchemaValueObject, 
@@ -162,11 +162,14 @@ class TrainModelUseCase:
                 metrics=metrics if isinstance(metrics, dict) else None,
             )
 
-        except Exception as e:
-            # ловим ошибки чттобы при падении не оставлять PENDING/RUNNING навсегда
+        except ValidationError as e:
             run.mark_failed(error=str(e))
             self.repo.save(run)
-            raise TrainingFailed(f'Обучение не выполнено: {e}') from e
+            raise
+        except Exception as e:
+            run.mark_failed(error=str(e))
+            self.repo.save(run)
+            raise TrainingFailed(f'Обучение (auto) не выполнено: {e}') from e
         
 
 

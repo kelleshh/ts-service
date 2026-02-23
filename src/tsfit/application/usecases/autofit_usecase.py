@@ -13,7 +13,7 @@ from tsfit.application.ports import (
     HyperparameterTuner,
     BuiltDataset,
 )
-from tsfit.domain.exceptions import IdempotencyConflict, TrainingFailed
+from tsfit.domain.exceptions import IdempotencyConflict, TrainingFailed, ValidationError
 from tsfit.domain.entities import TrainingRunEntity, RunStatus
 from tsfit.domain.value_objects import (
     DatasetSchemaValueObject, 
@@ -190,7 +190,11 @@ class TrainModelAutoUseCase:
                 tuning=tuning_report if isinstance(tuning_report, dict) else None,
             )
 
+        except ValidationError as e:
+            run.mark_failed(error=str(e))
+            self.repo.save(run)
+            raise
         except Exception as e:
             run.mark_failed(error=str(e))
             self.repo.save(run)
-            raise TrainingFailed(f'Обучение не выполнено: {e}') from e
+            raise TrainingFailed(f'Обучение (auto) не выполнено: {e}') from e
