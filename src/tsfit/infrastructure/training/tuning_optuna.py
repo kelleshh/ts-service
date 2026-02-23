@@ -17,7 +17,6 @@ def tune_xgb_params(
     primary_metric: str,
     n_trials: int,
     timeout_sec: int | None,
-    early_stopping_rounds: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     '''
     Подбор гиперпараметров на holdout (X_valid).
@@ -55,7 +54,6 @@ def tune_xgb_params(
             y_train,
             eval_set=[(X_valid, y_valid)],
             verbose=False,
-            early_stopping_rounds=early_stopping_rounds, # TODO: пофиксить тут баг
         )
         pred = model.predict(X_valid)
         return score(np.asarray(y_valid), np.asarray(pred))
@@ -70,3 +68,38 @@ def tune_xgb_params(
         'best_params': best_params,
     }
     return best_params, report
+
+# TODO: вынести в отдельный файл
+
+from tsfit.application.ports import BuiltDataset, HyperparameterTuner
+from tsfit.domain.value_objects import TuningConfigValueObject
+
+
+class OptunaXGBTuner(HyperparameterTuner):
+    '''
+    Реализация подбора гиперпараметра через optuna
+    '''
+
+    def tune(
+        self,
+        dataset: BuiltDataset,
+        base_params: dict[str, Any],
+        primary_metric: str,
+        tuning: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+
+        if isinstance(tuning, TuningConfigValueObject):
+            cfg = tuning
+        else:
+            raise TypeError('tuning должен быть TuningConfigValueObject')
+
+        return tune_xgb_params(
+            X_train=dataset.X_train,
+            y_train=dataset.y_train,
+            X_valid=dataset.X_valid,
+            y_valid=dataset.y_valid,
+            base_params=base_params,
+            primary_metric=primary_metric,
+            n_trials=cfg.n_trials,
+            timeout_sec=cfg.timeout_sec,
+        )

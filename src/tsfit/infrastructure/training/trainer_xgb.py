@@ -20,9 +20,11 @@ def _mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 class XGBModelTrainer(ModelTrainer):
     '''
-    Реализация обучателя для XGBoost (с поддержкой optuna)
+    Реализация обучателя для XGBoost
 
-    Возвращает словарь с мерриками, важностью фичей и параметрами
+    Возвращает словарь с метриками, важностью фичей и параметрами
+    
+    на вход приходит TrainingConfigValueObject (фиксированные параметры)
     '''
 
     def train_and_eval(self, dataset: BuiltDataset, training: TrainingConfigValueObject) -> dict[str, Any]:
@@ -35,7 +37,6 @@ class XGBModelTrainer(ModelTrainer):
 
         user_params = dict(training.xgb_params or {})
 
-        # в случае если пользователь выключил тюнинг оптуной юзаем это
         defaults: dict[str, Any] = {
             'objective': 'reg:squarederror',
             'n_estimators': 500,
@@ -48,32 +49,8 @@ class XGBModelTrainer(ModelTrainer):
 
         merged = {**defaults, **user_params}
 
-        tuning_report: dict[str, Any] | None = None
-        if training.tuning.enabled:
-            best_params, tuning_report = tune_xgb_params(
-                X_train=X_train,
-                y_train=y_train,
-                X_valid=X_valid,
-                y_valid=y_valid,
-                base_params=merged,
-                primary_metric=training.primary_metric,
-                n_trials=training.tuning.n_trials,
-                timeout_sec=training.tuning.timeout_sec,
-                early_stopping_rounds=training.tuning.early_stopping_rounds,
-            )
-            merged = {**merged, **best_params}
-
         model = XGBRegressor(**merged)
-        if training.tuning.enabled:
-            model.fit(
-                X_train,
-                y_train,
-                eval_set=[(X_valid, y_valid)],
-                verbose=False,
-                early_stopping_rounds=training.tuning.early_stopping_rounds,
-            )
-        else:
-            model.fit(X_train, y_train, eval_set=[(X_valid, y_valid)], verbose=False)
+        model.fit(X_train, y_train, eval_set=[(X_valid, y_valid)], verbose=False)
 
         pred = model.predict(X_valid)
         yv = np.asarray(y_valid)
@@ -88,7 +65,7 @@ class XGBModelTrainer(ModelTrainer):
             else:
                 raise ValueError(f'Неподдерживаемая метрика: {m}')
             
-            # TODO: сделать автоматическую (!) поддержку всех метрик
+            # TODO: сделать поддержку всех метрик
 
         # importance (топ-50 фичей)
         feature_importance: dict[str, float] = {}
@@ -108,8 +85,6 @@ class XGBModelTrainer(ModelTrainer):
             'feature_importance': feature_importance,
             'model_params': merged,
         }
-        if tuning_report is not None:
-            out['tuning'] = tuning_report
         return out
     
 
