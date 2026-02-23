@@ -13,7 +13,7 @@ from tsfit.application.ports import (
     BuiltDataset,
 )
 from tsfit.domain.exceptions import IdempotencyConflict, TrainingFailed
-from tsfit.domain.enitites import TrainingRunEntity, RunStatus
+from tsfit.domain.entites import TrainingRunEntity, RunStatus
 from tsfit.domain.value_objects import (
     DatasetSchemaValueObject, 
     TimeSeriesConfigValueObject, 

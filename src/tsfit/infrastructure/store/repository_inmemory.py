@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tsfit.application.ports import TrainingRunRepository
-from tsfit.domain.enitites import TrainingRunEntity
+from tsfit.domain.entites import TrainingRunEntity
 
 
 class InMemoryTrainingRunRepository(TrainingRunRepository):

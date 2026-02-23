@@ -9,7 +9,7 @@ from tsfit.domain.value_objects import (
     TrainingConfigValueObject,
     TuningConfigValueObject,
 )
-from tsfit.domain.enitites import RunStatus
+from tsfit.domain.entites import RunStatus
 
 
 class DatasetSchemaDTO(BaseModel):
