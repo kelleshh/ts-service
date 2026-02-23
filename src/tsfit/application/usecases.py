@@ -12,10 +12,14 @@ from tsfit.application.ports import (
     ModelTrainer,
     BuiltDataset,
 )
-from tsfit.domain.errors import IdempotencyConflict, TrainingFailed
-from tsfit.domain.training_run import TrainingRun, RunStatus
-from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig, TrainingConfig
-from tsfit.domain.validation import validate_rows_have_columns
+from tsfit.domain.exceptions import IdempotencyConflict, TrainingFailed
+from tsfit.domain.enitites import TrainingRunEntity, RunStatus
+from tsfit.domain.value_objects import (
+    DatasetSchemaValueObject, 
+    TimeSeriesConfigValueObject, 
+    TrainingConfigValueObject
+    )
+from tsfit.domain.rules import rule_validate_rows_have_columns
 
 
 @dataclass(frozen=True)
@@ -24,9 +28,9 @@ class TrainModelRequest:
     Запрос на обучение модели
     '''
     dataset_rows: list[dict[str, Any]]
-    dataset_schema: DatasetSchema
-    time_series: TimeSeriesConfig
-    training: TrainingConfig
+    dataset_schema: DatasetSchemaValueObject
+    time_series: TimeSeriesConfigValueObject
+    training: TrainingConfigValueObject
     idempotency_key: str | None = None
 
 
@@ -41,7 +45,7 @@ class TrainModelResult:
     metrics: dict[str, float] | None
 
 
-def _canonical_rows(rows: list[dict[str, Any]], schema: DatasetSchema) -> list[dict[str, Any]]:
+def _canonical_rows(rows: list[dict[str, Any]], schema: DatasetSchemaValueObject) -> list[dict[str, Any]]:
     '''
     Приводит строки к единому каноничному виду для корректного хэширования
     '''
@@ -97,7 +101,7 @@ class TrainModelUseCase:
         req.dataset_schema.validate()
         req.time_series.validate()
         req.training.validate()
-        validate_rows_have_columns(req.dataset_rows, req.dataset_schema)
+        rule_validate_rows_have_columns(req.dataset_rows, req.dataset_schema)
 
         payload_hash = _hash_payload(req)
 
@@ -119,7 +123,7 @@ class TrainModelUseCase:
                 )
 
         # создание запуска
-        run = TrainingRun.new_pending(
+        run = TrainingRunEntity.new_pending(
             run_id=self.id_gen(),
             created_at=self.clock(),
             idempotency_key=req.idempotency_key,
@@ -173,6 +177,6 @@ class GetRunUseCase:
     def __init__(self, repo: TrainingRunRepository) -> None:
         self.repo = repo
 
-    def execute(self, run_id: str) -> TrainingRun | None:
+    def execute(self, run_id: str) -> TrainingRunEntity | None:
         return self.repo.get(run_id)
     

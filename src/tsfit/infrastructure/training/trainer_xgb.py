@@ -6,7 +6,7 @@ import numpy as np
 from xgboost import XGBRegressor
 
 from tsfit.application.ports import BuiltDataset, ModelTrainer
-from tsfit.domain.spec import TrainingConfig
+from tsfit.domain.value_objects import TrainingConfigValueObject
 from tsfit.infrastructure.training.tuning_optuna import tune_xgb_params
 
 def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -25,7 +25,7 @@ class XGBModelTrainer(ModelTrainer):
     Возвращает словарь с мерриками, важностью фичей и параметрами
     '''
 
-    def train_and_eval(self, dataset: BuiltDataset, training: TrainingConfig) -> dict[str, Any]:
+    def train_and_eval(self, dataset: BuiltDataset, training: TrainingConfigValueObject) -> dict[str, Any]:
 
         X_train = dataset.X_train
         y_train = dataset.y_train

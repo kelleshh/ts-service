@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from tsfit.domain.errors import InvalidRunTransition
+from tsfit.domain.exceptions import InvalidRunTransition
 
 class RunStatus(str, Enum):
     '''
@@ -15,7 +15,7 @@ class RunStatus(str, Enum):
     FAILED = 'FAILED'
 
 @dataclass
-class TrainingRun:
+class TrainingRunEntity:
     run_id: str
     status: RunStatus
     created_at: datetime
@@ -34,7 +34,7 @@ class TrainingRun:
         *,
         idempotency_key: str | None,
         payload_hash: str | None,
-    ) -> 'TrainingRun':
+    ) -> 'TrainingRunEntity':
         return cls(
             run_id=run_id,
             status=RunStatus.PENDING,

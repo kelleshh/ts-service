@@ -3,7 +3,7 @@ import pytest
 pytest.importorskip('polars')
 
 from tsfit.infrastructure.dataset.parser_polars import PolarsDatasetParser
-from tsfit.domain.errors import ValidationError
+from tsfit.domain.exceptions import ValidationError
 
 
 def test_parser_rejects_duplicate_timestamps_within_series(schema_two_series) -> None:

@@ -1,8 +1,8 @@
-from tsfit.domain.errors import ValidationError
-from tsfit.domain.spec import DatasetSchema
+from tsfit.domain.exceptions import ValidationError
+from tsfit.domain.value_objects import DatasetSchemaValueObject
 
 
-def validate_rows_have_columns(rows: list[dict], schema: DatasetSchema) -> None:
+def rule_validate_rows_have_columns(rows: list[dict], schema: DatasetSchemaValueObject) -> None:
     if not rows:
         raise ValidationError('dataset пустой')
 

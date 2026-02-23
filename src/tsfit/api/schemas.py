@@ -1,15 +1,15 @@
 from pydantic import BaseModel, Field
 from typing import Any
 
-from tsfit.domain.spec import (
-    DatasetSchema, 
-    FeatureSpec, 
-    TimeSeriesConfig, 
-    SplitConfig,
-    TrainingConfig,
-    TuningConfig,
+from tsfit.domain.value_objects import (
+    DatasetSchemaValueObject, 
+    FeatureSpecValueObject, 
+    TimeSeriesConfigValueObject, 
+    SplitConfigValueObject,
+    TrainingConfigValueObject,
+    TuningConfigValueObject,
 )
-from tsfit.domain.training_run import RunStatus
+from tsfit.domain.enitites import RunStatus
 
 
 class DatasetSchemaDTO(BaseModel):
@@ -18,8 +18,8 @@ class DatasetSchemaDTO(BaseModel):
     series_id_col: str | None = None
     exogenous_cols: list[str] = Field(default_factory=list)
 
-    def to_domain(self) -> DatasetSchema:
-        return DatasetSchema(
+    def to_domain(self) -> DatasetSchemaValueObject:
+        return DatasetSchemaValueObject(
             timestamp_col=self.timestamp_col,
             target_col=self.target_col,
             series_id_col=self.series_id_col,
@@ -34,8 +34,8 @@ class FeatureSpecDTO(BaseModel):
     rolling_max_windows: list[int] = Field(default_factory=list)
     diff_lags: list[int] = Field(default_factory=list)
     
-    def to_domain(self) -> FeatureSpec:
-        return FeatureSpec(
+    def to_domain(self) -> FeatureSpecValueObject:
+        return FeatureSpecValueObject(
             lags=self.lags,
             rolling_mean_windows=self.rolling_mean_windows,
             rolling_std_windows=self.rolling_std_windows,
@@ -48,8 +48,8 @@ class SplitConfigDTO(BaseModel):
     valid_fraction: float = 0.2
     min_valid_size: int = 5
     
-    def to_domain(self) -> SplitConfig:
-        return SplitConfig(
+    def to_domain(self) -> SplitConfigValueObject:
+        return SplitConfigValueObject(
             valid_fraction=self.valid_fraction,
             min_valid_size=self.min_valid_size,
         )
@@ -60,8 +60,8 @@ class TimeSeriesConfigDTO(BaseModel):
     features: FeatureSpecDTO
     split: SplitConfigDTO = Field(default_factory=SplitConfigDTO)
 
-    def to_domain(self) -> TimeSeriesConfig:
-        return TimeSeriesConfig(
+    def to_domain(self) -> TimeSeriesConfigValueObject:
+        return TimeSeriesConfigValueObject(
             horizon=self.horizon,
             features=self.features.to_domain(),
             split=self.split.to_domain(),
@@ -73,8 +73,8 @@ class TuningConfigDTO(BaseModel):
     timeout_sec: int | None = 60
     early_stopping_rounds: int = 50
 
-    def to_domain(self) -> TuningConfig:
-        return TuningConfig(
+    def to_domain(self) -> TuningConfigValueObject:
+        return TuningConfigValueObject(
             enabled=self.enabled,
             n_trials=self.n_trials,
             timeout_sec=self.timeout_sec,
@@ -87,8 +87,8 @@ class TrainingConfigDTO(BaseModel):
     primary_metric: str = 'rmse'
     tuning: TuningConfigDTO = Field(default_factory=TuningConfigDTO)
 
-    def to_domain(self) -> TrainingConfig:
-        return TrainingConfig(
+    def to_domain(self) -> TrainingConfigValueObject:
+        return TrainingConfigValueObject(
             xgb_params=self.xgb_params,
             metrics=self.metrics,
             primary_metric=self.primary_metric,

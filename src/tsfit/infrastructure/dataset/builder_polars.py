@@ -6,8 +6,8 @@ import numpy as np
 import polars as pl
 
 from tsfit.application.ports import BuiltDataset, Frame, TimeSeriesDatasetBuilder
-from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig
-from tsfit.domain.errors import ValidationError
+from tsfit.domain.value_objects import DatasetSchemaValueObject, TimeSeriesConfigValueObject
+from tsfit.domain.exceptions import ValidationError
 
 class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
     '''
@@ -19,8 +19,8 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
 
     def build_train_valid(self, 
                           frame: pl.DataFrame, 
-                          schema: DatasetSchema, 
-                          cfg: TimeSeriesConfig) -> BuiltDataset:
+                          schema: DatasetSchemaValueObject, 
+                          cfg: TimeSeriesConfigValueObject) -> BuiltDataset:
         ts_col = schema.timestamp_col
         targ_col = schema.target_col
         sid_col = schema.series_id_col

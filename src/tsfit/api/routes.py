@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool # чтобы не блоки
 
 from tsfit.api.schemas import FitRequest, FitResponse
 from tsfit.application.usecases import TrainModelUseCase, TrainModelRequest, GetRunUseCase
-from tsfit.domain.errors import IdempotencyConflict, ValidationError, TrainingFailed
+from tsfit.domain.exceptions import IdempotencyConflict, ValidationError, TrainingFailed
 
 router = APIRouter(route_class=DishkaRoute)
 

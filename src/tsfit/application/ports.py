@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 from typing import Protocol, Any
 
-from tsfit.domain.training_run import TrainingRun
-from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig
+from tsfit.domain.enitites import TrainingRunEntity
+from tsfit.domain.value_objects import DatasetSchemaValueObject, TimeSeriesConfigValueObject
 
 Frame = Any # application не должен знать про pandas/polars и pl.DataFrame/pd.DataFrame
 Series = Any # аналогичн для series
@@ -24,13 +24,13 @@ class BuiltDataset:
 
 
 class TrainingRunRepository(Protocol):
-    def save(self, run: TrainingRun) -> None: ...
-    def get(self, run_id: str) -> TrainingRun | None: ...
-    def find_by_idempotency(self, key: str) -> TrainingRun | None: ...
+    def save(self, run: TrainingRunEntity) -> None: ...
+    def get(self, run_id: str) -> TrainingRunEntity | None: ...
+    def find_by_idempotency(self, key: str) -> TrainingRunEntity | None: ...
 
 
 class DatasetParser(Protocol):
-    def parse(self, rows: list[dict[str, Any]], schema: DatasetSchema) -> Frame:
+    def parse(self, rows: list[dict[str, Any]], schema: DatasetSchemaValueObject) -> Frame:
         '''парсит JSON ы табличный формат и делает строгие проверки временнОй оси'''
         ...
 
@@ -39,8 +39,8 @@ class TimeSeriesDatasetBuilder(Protocol):
     def build_train_valid(
         self,
         frame: Frame,
-        schema: DatasetSchema,
-        cfg: TimeSeriesConfig,
+        schema: DatasetSchemaValueObject,
+        cfg: TimeSeriesConfigValueObject,
     ) -> BuiltDataset:
         '''
         Строит supervised-датасет:

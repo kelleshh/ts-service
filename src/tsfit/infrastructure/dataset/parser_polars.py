@@ -5,8 +5,8 @@ from typing import Any
 import polars as pl
 
 from tsfit.application.ports import DatasetParser
-from tsfit.domain.spec import DatasetSchema
-from tsfit.domain.errors import ValidationError
+from tsfit.domain.value_objects import DatasetSchemaValueObject
+from tsfit.domain.exceptions import ValidationError
 
 
 class PolarsDatasetParser(DatasetParser):
@@ -22,7 +22,7 @@ class PolarsDatasetParser(DatasetParser):
 
     def parse(self, 
               rows: list[dict[str, Any]], 
-              schema: DatasetSchema) -> pl.DataFrame:
+              schema: DatasetSchemaValueObject) -> pl.DataFrame:
         
         if not rows: raise ValidationError('dataset пустой')
 

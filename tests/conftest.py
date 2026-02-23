@@ -9,12 +9,19 @@ import pytest
 
 pl = pytest.importorskip('polars')
 
-from tsfit.domain.spec import DatasetSchema, TimeSeriesConfig, FeatureSpec, SplitConfig, TrainingConfig, TuningConfig
+from tsfit.domain.value_objects import (
+    DatasetSchemaValueObject, 
+    TimeSeriesConfigValueObject, 
+    FeatureSpecValueObject, 
+    SplitConfigValueObject, 
+    TrainingConfigValueObject, 
+    TuningConfigValueObject
+)
 
 
 @pytest.fixture()
-def schema_two_series() -> DatasetSchema:
-    return DatasetSchema(
+def schema_two_series() -> DatasetSchemaValueObject:
+    return DatasetSchemaValueObject(
         timestamp_col='ts',
         target_col='y',
         series_id_col='sid',
@@ -23,10 +30,10 @@ def schema_two_series() -> DatasetSchema:
 
 
 @pytest.fixture()
-def ts_cfg_basic() -> TimeSeriesConfig:
-    return TimeSeriesConfig(
+def ts_cfg_basic() -> TimeSeriesConfigValueObject:
+    return TimeSeriesConfigValueObject(
         horizon=1,
-        features=FeatureSpec(
+        features=FeatureSpecValueObject(
             lags=[1, 2, 3],
             rolling_mean_windows=[3],
             rolling_std_windows=[3],
@@ -34,17 +41,17 @@ def ts_cfg_basic() -> TimeSeriesConfig:
             rolling_max_windows=[3],
             diff_lags=[1, 3],
         ),
-        split=SplitConfig(valid_fraction=0.2, min_valid_size=3),
+        split=SplitConfigValueObject(valid_fraction=0.2, min_valid_size=3),
     )
 
 
 @pytest.fixture()
-def training_cfg_no_tuning() -> TrainingConfig:
-    return TrainingConfig(
+def training_cfg_no_tuning() -> TrainingConfigValueObject:
+    return TrainingConfigValueObject(
         xgb_params={'n_estimators': 50},
         metrics=['rmse', 'mae'],
         primary_metric='rmse',
-        tuning=TuningConfig(enabled=False),
+        tuning=TuningConfigValueObject(enabled=False),
     )
 
 

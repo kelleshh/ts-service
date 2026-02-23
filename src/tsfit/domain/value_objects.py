@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Any
-from tsfit.domain.errors import ValidationError
+from tsfit.domain.exceptions import ValidationError
 
 @dataclass(frozen=True)
-class DatasetSchema:
+class DatasetSchemaValueObject:
     '''
     Схема колонок в датасете
     '''
@@ -30,7 +30,7 @@ class DatasetSchema:
             raise ValidationError('dataset_schema: имена колонок не должны пересекаться')
 
 @dataclass(frozen=True)
-class FeatureSpec:
+class FeatureSpecValueObject:
     '''
     Спецификация для генерации признаков
     !!!: скользящие статистики считаются только по прошлым значениям
@@ -61,7 +61,7 @@ class FeatureSpec:
 
 
 @dataclass(frozen=True)
-class SplitConfig:
+class SplitConfigValueObject:
     '''
     Конфиг сплитинга по времени
     '''
@@ -75,13 +75,13 @@ class SplitConfig:
             raise ValidationError('min_valid_size должен быть > 0')
 
 @dataclass(frozen=True)
-class TimeSeriesConfig:
+class TimeSeriesConfigValueObject:
     '''
     Конфиг постановки временного ряда
     '''
     horizon: int
-    features: FeatureSpec
-    split: SplitConfig = field(default_factory=SplitConfig)
+    features: FeatureSpecValueObject
+    split: SplitConfigValueObject = field(default_factory=SplitConfigValueObject)
 
     def validate(self) -> None:
         if not isinstance(self.horizon, int) or self.horizon <= 0:
@@ -91,7 +91,7 @@ class TimeSeriesConfig:
         
 
 @dataclass(frozen=True)
-class TuningConfig:
+class TuningConfigValueObject:
     '''
     Настройки опционального подбора гиперпараметров.
     '''
@@ -123,7 +123,7 @@ class TuningConfig:
 
 
 @dataclass(frozen=True)
-class TrainingConfig:
+class TrainingConfigValueObject:
     '''
     Конфиг обучения модели (про обучение как процесс)
     '''
@@ -131,7 +131,7 @@ class TrainingConfig:
     xgb_params: dict[str, Any] = field(default_factory=dict)
     metrics: list[str] = field(default_factory=lambda: ['rmse', 'mae'])
     primary_metric: str = 'rmse'
-    tuning: TuningConfig = field(default_factory=TuningConfig)
+    tuning: TuningConfigValueObject = field(default_factory=TuningConfigValueObject)
 
     def validate(self) -> None:
         if not isinstance(self.xgb_params, dict) or any(not isinstance(k, str) for k in self.xgb_params.keys()):
