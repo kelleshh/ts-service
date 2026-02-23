@@ -87,6 +87,8 @@ class XGBModelTrainer(ModelTrainer):
                 metrics[m] = _mae(yv, pv)
             else:
                 raise ValueError(f'Неподдерживаемая метрика: {m}')
+            
+            # TODO: сделать автоматическую (!) поддержку всех метрик
 
         # importance (топ-50 фичей)
         feature_importance: dict[str, float] = {}
