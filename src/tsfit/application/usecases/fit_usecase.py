@@ -152,7 +152,7 @@ class TrainModelUseCase:
         except Exception as e:
             run.mark_failed(error=str(e))
             self.repo.save(run)
-            raise TrainingFailed(f'Обучение (auto) не выполнено: {e}') from e
+            raise TrainingFailed(f'Обучение не выполнено: {e}') from e
         
 
 
