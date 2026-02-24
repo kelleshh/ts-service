@@ -7,11 +7,10 @@ import optuna
 from xgboost import XGBRegressor
 
 from tsfit.application.ports import BuiltDataset, HyperparameterTuner
-from tsfit.domain.value_objects import TuningConfigValueObject
-from tsfit.application.ports import BuiltDataset, HyperparameterTuner
-from tsfit.domain.value_objects import TuningConfigValueObject
+from tsfit.domain.value_objects import TuningConfigValueObject, TrainingConfigValueObject
 
 from tsfit.domain.metrics_invariants import is_higher_better
+from tsfit.infrastructure.training.xgb_defaults import merge_params
 
 
 def tune_xgb_params(
@@ -28,9 +27,7 @@ def tune_xgb_params(
     '''
     Подбор гиперпараметров на holdout (X_valid).
 
-    Тюнинг с помощью инструмента optuna
-
-    Возвращает (best_params, tuning_report).
+    Возвращает (best_params, report).
     '''
 
 
@@ -40,7 +37,6 @@ def tune_xgb_params(
 
     def objective(trial: optuna.Trial) -> float:
         params = dict(base_params)
-        params.pop('eval_metric', None)
 
         params.update(
             {
@@ -104,23 +100,29 @@ class OptunaXGBTuner(HyperparameterTuner):
     def tune(
         self,
         dataset: BuiltDataset,
-        base_params: dict[str, Any],
-        primary_metric: str,
-        tuning: Any,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        training: TrainingConfigValueObject,
+        tuning: TuningConfigValueObject,
+    ) -> tuple[TrainingConfigValueObject, dict[str, Any]]:
+        base_params = merge_params(training.model_params)
 
-        if isinstance(tuning, TuningConfigValueObject):
-            cfg = tuning
-        else:
-            raise TypeError('tuning должен быть TuningConfigValueObject')
-
-        return tune_xgb_params(
+        best_params, report = tune_xgb_params(
             X_train=dataset.X_train,
             y_train=dataset.y_train,
             X_valid=dataset.X_valid,
             y_valid=dataset.y_valid,
             base_params=base_params,
-            primary_metric=primary_metric,
-            n_trials=cfg.n_trials,
-            timeout_sec=cfg.timeout_sec,
+            primary_metric=training.primary_metric,
+            n_trials=tuning.n_trials,
+            timeout_sec=tuning.timeout_sec,
         )
+
+        final_params = dict(base_params)
+        final_params.update(best_params)
+
+        final_training = TrainingConfigValueObject(
+            model_params=final_params,
+            metrics=training.metrics,
+            primary_metric=training.primary_metric,
+        )
+
+        return final_training, report

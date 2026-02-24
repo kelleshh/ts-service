@@ -7,6 +7,7 @@ from xgboost import XGBRegressor
 
 from tsfit.application.ports import BuiltDataset, ModelTrainer
 from tsfit.domain.value_objects import TrainingConfigValueObject
+from tsfit.infrastructure.training.xgb_defaults import merge_params
 
 class XGBModelTrainer(ModelTrainer):
     '''
@@ -29,25 +30,11 @@ class XGBModelTrainer(ModelTrainer):
         y_valid = dataset.y_valid
         feature_names = dataset.feature_names
 
-        user_params = dict(training.xgb_params or {})
-        user_params.pop('eval_metric', None)
-
-        defaults: dict[str, Any] = {
-            'objective': 'reg:squarederror',
-            'n_estimators': 500,
-            'learning_rate': 0.05,
-            'max_depth': 6,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'random_state': 42,
-            # в некоторых оркужениях (типа CI/ограниченные контейнеры) многопоточность у хгбуст может зависать, поэтому ставим дефлот n_jobs=1 но пользователь может таки переопределить
-            'n_jons': 1,
-        }
-
-        merged = {**defaults, **user_params}
+        # устанавливает параметры
+        params = merge_params(training.model_params)
 
         model = XGBRegressor(
-            **merged,
+            **params,
             eval_metric=list(training.metrics))
         
         model.fit(X_train, y_train, eval_set=[(X_valid, y_valid)], verbose=False)
@@ -84,14 +71,13 @@ class XGBModelTrainer(ModelTrainer):
                 sorted(feature_importance.items(), key=lambda kv: kv[1], reverse=True)[:50]
             )
 
-        out: dict[str, Any] = {
+        return {
             'metrics': metrics,
             'primary_metric': training.primary_metric,
             'primary_metric_value': float(metrics[training.primary_metric]),
             'feature_importance': feature_importance,
-            'model_params': merged,
+            'model_params': params,
         }
-        return out
     
 
-    # TODO: почему то метрики ужасные. на вторник: надо полностью пересмотреть все что я тут нагородил
+    # TODO: почему то метрики ужасные. на среду: надо полностью пересмотреть все что я тут нагородил
