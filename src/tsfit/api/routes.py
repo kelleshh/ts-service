@@ -1,15 +1,12 @@
 from fastapi import (
     APIRouter,
-    Request,
-    Depends,
     Response,
     status as s,
     HTTPException
 )
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from starlette.concurrency import run_in_threadpool # чтобы не блокировать event loop при выполнении usecase по обучению модели
-
+from starlette.concurrency import run_in_threadpool
 from tsfit.api.schemas import (
     FitRequest, 
     FitResponse,
@@ -28,7 +25,15 @@ from tsfit.application.usecases.get_usecase import GetRunUseCase
 
 from tsfit.domain.exceptions import IdempotencyConflict, ValidationError, TrainingFailed
 
+
 router = APIRouter(route_class=DishkaRoute)
+
+
+@router.get('/health')
+async def health() -> dict[str, str]:
+    '''Служебный эндпоинт проверки доступности сервиса.'''
+    return {'status': 'ok'}
+
 
 @router.post('/fit', response_model=FitResponse)
 async def fit( 
@@ -56,7 +61,6 @@ async def fit(
     except TrainingFailed as e:
         # внутренняя ошибка обучения/пайплайна
         raise HTTPException(status_code=s.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
     response.status_code = s.HTTP_201_CREATED if result.created else s.HTTP_200_OK
 
@@ -111,6 +115,9 @@ async def get_run(
     run_id: str, 
     uc: FromDishka[GetRunUseCase]
     ) -> dict:
+    '''
+    Возвращает метаданные запуска обучения по run_id
+    '''
 
     run = uc.execute(run_id)
     if run is None:
@@ -130,6 +137,9 @@ async def get_run_result(
     run_id: str, 
     uc: FromDishka[GetRunUseCase]
     ) -> dict:
+    '''
+    Возвращает сохраненный результат обучения по run_id
+    '''
 
     run = uc.execute(run_id)
     if run is None:
@@ -141,6 +151,6 @@ async def get_run_result(
     }
 
 
-# TODO: сделать инференс-эндпоинт который только выдает предсказания
-
-# TODO: сохранять модели в пул куда-то в mlflow или где то еще, и чтобы их можно было достать на инференсе
+# TODO: сделать инференс-эндпоинт который только выдает предсказания:
+# /fit обязан возвращать помимо прочего еще и сериализованную модель
+# /predict принимает модель и сэмпл в теле запроса и делает предсказание и возвращает его (с идемпотентностью)
