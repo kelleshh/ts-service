@@ -38,7 +38,8 @@ class XGBModelTrainer(ModelTrainer):
         
         model.fit(X_train, y_train, eval_set=[(X_valid, y_valid)], verbose=False)
 
-        # достает метрики на последней итреации
+        # достает метрики на лучшей итерации
+
         evals_result = model.evals_result()
         valid_name = 'validation_0'
         if valid_name not in evals_result:
@@ -57,7 +58,10 @@ class XGBModelTrainer(ModelTrainer):
             series = valid_metrics[requested]
             if not series:
                 raise ValueError(f'Пустая история значений метрики {requested}')
-            metrics[requested] = float(series[-1])
+            
+            best_i = getattr(model, 'best_iteration', None)
+            idx = int(best_i) if best_i is not None else -1
+            metrics[requested] = float(series[idx])
 
         # importance (топ-50 фичей)
         feature_importance: dict[str, float] = {}
