@@ -30,6 +30,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
         h = int(cfg.horizon) # горизонт
 
         df = frame.clone()
+        n_rows_raw = int(df.height) # сырые строки сразу считаются до препроцессинга
 
         # ожидается что timestamp уже стал datetime от парсера
         if df.schema.get(ts_col) not in (pl.Datetime, pl.Datetime(time_zone='UTC'), pl.Datetime(time_unit='us', time_zone='UTC')):
@@ -208,4 +209,10 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
             X_valid=X_valid,
             y_valid=y_valid,
             feature_names=feature_cols,
+
+            n_rows_raw=n_rows_raw,
+            n_total_after_features=int(df2.height),
+            n_train=int(train_df.height),
+            n_valid=int(valid_df.height),
+            n_features=int(len(feature_cols)),
         )

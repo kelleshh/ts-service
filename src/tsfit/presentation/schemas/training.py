@@ -38,7 +38,7 @@ ALLOWED_EVAL_METRICS: frozenset[str] = frozenset(
     }
 )
 
-# DTO (обмен данными для API)
+# DTO (обмен данными для API) входные и выходные
 
 class DatasetSchemaDTO(BaseModel):
     '''
