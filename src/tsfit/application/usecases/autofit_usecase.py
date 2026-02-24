@@ -131,38 +131,13 @@ class TrainModelAutoUseCase:
                 cfg=req.time_series,
             )
 
-            # дефолтные параметры
-            defaults: dict[str, Any] = {
-                'objective': 'reg:squarederror',
-                'n_estimators': 500,
-                'learning_rate': 0.05,
-                'max_depth': 6,
-                'subsample': 0.8,
-                'colsample_bytree': 0.8,
-                'random_state': 42,
-                'n_jobs': 1,
-            }
-            user_params = dict(req.training.xgb_params or {})
-            base_params = {**defaults, **user_params}
-
-            # подбор гиперпараметров
-            best_params, tuning_report = self.tuner.tune(
+            final_training, tuning_report = self.tuner.tune(
                 dataset=built,
-                base_params=base_params,
-                primary_metric=req.training.primary_metric,
+                training=req.training,
                 tuning=req.tuning,
             )
 
-            # финальное обучение уже по подобранным гиперпеараметрам (без optuna)
-            final_params = {**base_params, **best_params}
-            final_training = TrainingConfigValueObject(
-                xgb_params=final_params,
-                metrics=req.training.metrics,
-                primary_metric=req.training.primary_metric,
-            )
             result = self.trainer.train_and_eval(dataset=built, training=final_training)
-
-            # доп данные о подборе сохраняем в результат
             result.setdefault('feature_names', built.feature_names)
             result['tuning'] = tuning_report
 

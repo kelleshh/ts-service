@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from typing import Protocol, Any
 
 from tsfit.domain.entities import TrainingRunEntity
-from tsfit.domain.value_objects import DatasetSchemaValueObject, TimeSeriesConfigValueObject
+from tsfit.domain.value_objects import (
+    DatasetSchemaValueObject, 
+    TimeSeriesConfigValueObject, 
+    TrainingConfigValueObject, 
+    TuningConfigValueObject,
+)
 
 Frame = Any # application не должен знать про pandas/polars и pl.DataFrame/pd.DataFrame
 Series = Any # аналогичн для series
@@ -85,13 +90,12 @@ class HyperparameterTuner(Protocol):
     def tune(
         self,
         dataset: BuiltDataset,
-        base_params: dict[str, Any],
-        primary_metric: str,
-        tuning: Any,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        '''
-        Возвращает:
-        - best_params: словарь параметров, которые нужно ДОБАВИТЬ/ПЕРЕОПРЕДЕЛИТЬ в base_params
-        - report: короткий отчет о подборе (можно сохранять в run.result)
+        training: TrainingConfigValueObject,
+        tuning: TuningConfigValueObject,
+    ) -> tuple[TrainingConfigValueObject, dict[str, Any]]:
+        '''Возвращает:
+
+        - final_training: конфигурация обучения с подобранными параметрами
+        - report: короткий отчёт о подборе (для сохранения в результате запуска)
         '''
         ...
