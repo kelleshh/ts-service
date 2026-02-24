@@ -22,30 +22,3 @@ def rule_validate_rows_have_columns(rows: list[dict], schema: DatasetSchemaValue
         if missing:
             raise ValidationError(f'в row[{i}] нет колонок: {sorted(missing)}')
         
-# доменные базовые метрики xgboost (инвариант)
-
-BASE_XGBOOST_EVAL_METRICS: frozenset[str] = frozenset(
-    {
-        'rmse',
-        'rmsle',
-        'mae',
-        'mape',
-        'mphe',
-        'logloss',
-        'error',
-        'merror',
-        'mlogloss',
-        'auc',
-        'aucpr',
-        'pre',
-        'ndcg',
-        'map',
-        'poisson-nloglik',
-        'gamma-nloglik',
-        'cox-nloglik',
-        'gamma-deviance',
-        'tweedie-nloglik',
-        'aft-nloglik',
-        'interval-regression-accuracy',
-    }
-)

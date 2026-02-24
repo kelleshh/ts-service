@@ -11,7 +11,7 @@ from tsfit.domain.value_objects import (
     TuningConfigValueObject,
 )
 from tsfit.domain.entities import RunStatus
-from tsfit.domain.rules import BASE_XGBOOST_EVAL_METRICS
+from tsfit.domain.metrics_invariants import BASE_XGBOOST_EVAL_METRICS
 
 
 # DTO (обмен данными для API)

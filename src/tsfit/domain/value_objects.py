@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 from tsfit.domain.exceptions import ValidationError
-from tsfit.domain.rules import BASE_XGBOOST_EVAL_METRICS
+from tsfit.domain.metrics_invariants import BASE_XGBOOST_EVAL_METRICS
 
 @dataclass(frozen=True)
 class DatasetSchemaValueObject:
