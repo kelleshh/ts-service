@@ -24,18 +24,27 @@ class BuiltDataset:
 
 
 class TrainingRunRepository(Protocol):
+    '''
+    Порт для хранения и получения TrainingRunEntity.
+    '''
     def save(self, run: TrainingRunEntity) -> None: ...
     def get(self, run_id: str) -> TrainingRunEntity | None: ...
     def find_by_idempotency(self, key: str) -> TrainingRunEntity | None: ...
 
 
 class DatasetParser(Protocol):
+    '''
+    Порт для преобразования входного JSON в табличный формат.
+    '''
     def parse(self, rows: list[dict[str, Any]], schema: DatasetSchemaValueObject) -> Frame:
         '''парсит JSON ы табличный формат и делает строгие проверки временнОй оси'''
         ...
 
 
 class TimeSeriesDatasetBuilder(Protocol):
+    '''
+    Порт для построения признаков и разреза по времени.
+    '''
     def build_train_valid(
         self,
         frame: Frame,
@@ -53,6 +62,9 @@ class TimeSeriesDatasetBuilder(Protocol):
 
 
 class ModelTrainer(Protocol):
+    '''
+    Порт обучения модели
+    '''
     def train_and_eval(
         self,
         dataset: BuiltDataset,

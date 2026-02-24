@@ -6,7 +6,7 @@ from tsfit.domain.entities import TrainingRunEntity
 
 class InMemoryTrainingRunRepository(TrainingRunRepository):
     '''
-    Хранилище запусков обучения в памяти процесса # TODO: сделать нормально а не это
+    Хранилище запусков обучения в памяти процесса
     '''
 
     def __init__(self) -> None:
