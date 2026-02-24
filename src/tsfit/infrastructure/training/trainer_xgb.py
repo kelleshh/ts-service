@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 from xgboost import XGBRegressor
 
 from tsfit.application.ports import BuiltDataset, ModelTrainer
