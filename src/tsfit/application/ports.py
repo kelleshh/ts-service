@@ -27,6 +27,13 @@ class BuiltDataset:
     y_valid: Series
     feature_names: list[str]
 
+    # статистики по данным (нужны для доменных правил автоподбора)
+    n_rows_raw: int
+    n_total_after_features: int
+    n_train: int
+    n_valid: int
+    n_features: int
+
 
 class TrainingRunRepository(Protocol):
     '''

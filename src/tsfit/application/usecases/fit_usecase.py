@@ -42,6 +42,7 @@ class TrainModelResult:
     status: RunStatus
     created: bool
     metrics: dict[str, float] | None
+    data_profile: dict[str, int] | None
 
 
 class TrainModelUseCase:
@@ -50,7 +51,7 @@ class TrainModelUseCase:
     Последовательность:
     1) доменные провеки
     2) расчет хэша
-    3) идемпотентность по idempotency_key
+    3) проверка идемпотентности по idempotency_key
     4) созданиеTrainingRunEntity
     5) парсинг данных и сборка датасета + препроцессинг
     6) обучение модели и расчет метрик
@@ -95,14 +96,22 @@ class TrainModelUseCase:
             if existing:
                 if existing.payload_hash and existing.payload_hash != payload_hash:
                     raise IdempotencyConflict('Одинаковый idempotency_key, но разные данные/параметры')
-                metrics = None
+
+                metrics: dict[str, float] | None = None
                 if existing.result and isinstance(existing.result.get('metrics'), dict):
                     metrics = existing.result['metrics']
+
+                data_profile: dict[str, int] | None = None
+                if existing.result and isinstance(existing.result.get('data_profile'), dict):
+                    dp = existing.result['data_profile']
+                    if all(isinstance(v, int) for v in dp.values()):
+                        data_profile = dp
                 return TrainModelResult(
                     run_id=existing.run_id,
                     status=existing.status,
                     created=False,
                     metrics=metrics,
+                    data_profile=data_profile,
                 )
 
         # создание запуска
@@ -134,6 +143,23 @@ class TrainModelUseCase:
 
             # результат
             result.setdefault('feature_names', built.feature_names)
+
+            data_profile = {
+                'n_rows_raw': int(built.n_rows_raw),
+                'n_total_after_features': int(built.n_total_after_features),
+                'n_train': int(built.n_train),
+                'n_valid': int(built.n_valid),
+                'n_features': int(built.n_features),
+            }
+            result['data_profile'] = data_profile
+
+            # фиксируется итоговая конфигурация обучения
+            result['final_training'] = {
+                'model_params': result.get('model_params'),
+                'metrics': list(req.training.metrics),
+                'primary_metric': str(req.training.primary_metric),
+            }
+
             run.mark_done(result=result)
             self.repo.save(run)
 
@@ -143,6 +169,7 @@ class TrainModelUseCase:
                 status=run.status,
                 created=True,
                 metrics=metrics if isinstance(metrics, dict) else None,
+                data_profile=data_profile,
             )
 
         except ValidationError as e:

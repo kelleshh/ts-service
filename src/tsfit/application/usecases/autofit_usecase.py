@@ -46,7 +46,8 @@ class TrainModelAutoResult:
     status: RunStatus
     created: bool
     metrics: dict[str, float] | None
-    tuning: dict[str, Any] | None
+    data_profile: dict[str, int] | None
+    tuning_report: dict[str, Any] | None
 
 
 class TrainModelAutoUseCase:
@@ -96,19 +97,27 @@ class TrainModelAutoUseCase:
             if existing:
                 if existing.payload_hash and existing.payload_hash != payload_hash:
                     raise IdempotencyConflict('Одинаковый idempotency_key, но разные данные/параметры')
-                metrics = None
-                tuning = None
+                
+                metrics: dict[str, float] | None = None
+                data_profile: dict[str, int] | None = None
+                tuning_report: dict[str, Any] | None = None
+
                 if existing.result and isinstance(existing.result, dict):
                     if isinstance(existing.result.get('metrics'), dict):
                         metrics = existing.result['metrics']
-                    if isinstance(existing.result.get('tuning'), dict):
-                        tuning = existing.result['tuning']
+                    if isinstance(existing.result.get('data_profile'), dict):
+                        dp = existing.result['data_profile']
+                        if all(isinstance(v, int) for v in dp.values()):
+                            data_profile = dp
+                    if isinstance(existing.result.get('tuning_report'), dict):
+                        tuning_report = existing.result['tuning_report']
                 return TrainModelAutoResult(
                     run_id=existing.run_id,
                     status=existing.status,
                     created=False,
                     metrics=metrics,
-                    tuning=tuning,
+                    data_profile=data_profile,
+                    tuning_report=tuning_report,
                 )
 
         run = TrainingRunEntity.new_pending(
@@ -139,7 +148,21 @@ class TrainModelAutoUseCase:
 
             result = self.trainer.train_and_eval(dataset=built, training=final_training)
             result.setdefault('feature_names', built.feature_names)
-            result['tuning'] = tuning_report
+
+            data_profile = {
+                'n_rows_raw': int(built.n_rows_raw),
+                'n_total_after_features': int(built.n_total_after_features),
+                'n_train': int(built.n_train),
+                'n_valid': int(built.n_valid),
+                'n_features': int(built.n_features),
+            }
+            result['data_profile'] = data_profile
+            result['tuning_report'] = tuning_report
+            result['final_training'] = {
+                'model_params': result.get('model_params'),
+                'metrics': list(final_training.metrics),
+                'primary_metric': str(final_training.primary_metric),
+            }
 
             run.mark_done(result=result)
             self.repo.save(run)
@@ -150,7 +173,8 @@ class TrainModelAutoUseCase:
                 status=run.status,
                 created=True,
                 metrics=metrics if isinstance(metrics, dict) else None,
-                tuning=tuning_report if isinstance(tuning_report, dict) else None,
+                data_profile=data_profile,
+                tuning_report=tuning_report if isinstance(tuning_report, dict) else None,
             )
 
         except ValidationError as e:
