@@ -111,7 +111,7 @@ class TuningConfigDTO(BaseModel):
         )
     
 
-class XGBParamsDTO(BaseModel): # TODO: решить что с этим делать с этой схемой
+class XGBParamsDTO(BaseModel):
     '''
     Явно описанные параметры обучения, которые мы разрешаем принимать от пользователя
     '''
