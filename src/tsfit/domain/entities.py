@@ -7,7 +7,11 @@ from tsfit.domain.exceptions import InvalidRunTransition
 
 class RunStatus(str, Enum):
     '''
-    Статусы запуска
+    Жизненный цикл запуска:
+    - PENDING: создан, но еще не начали обучение
+    - RUNNING: обучение выполняется
+    - DONE: обучение завершено успешно, результат сохранен в result
+    - FAILED: обучение завершено с ошибкой, причина в error
     '''
     PENDING = 'PENDING'
     RUNNING = 'RUNNING'
@@ -16,6 +20,14 @@ class RunStatus(str, Enum):
 
 @dataclass
 class TrainingRunEntity:
+    '''
+    Запуск обучения, хранит:
+    - идентификатор запуска
+    - статус
+    - время создания
+    - параметры идемпотентности
+    - результат обучения (метрики, параметры модели и т.д.)
+    '''
     run_id: str
     status: RunStatus
     created_at: datetime
@@ -27,7 +39,7 @@ class TrainingRunEntity:
     result: dict[str, Any] | None = None
 
     @classmethod
-    def new_pending( # автоматическая простановка статуса Pending
+    def new_pending(
         cls,
         run_id: str,
         created_at: datetime,
@@ -35,6 +47,9 @@ class TrainingRunEntity:
         idempotency_key: str | None,
         payload_hash: str | None,
     ) -> 'TrainingRunEntity':
+        '''
+        Фабрика для создания запуска в статусе PENDING.
+        '''
         return cls(
             run_id=run_id,
             status=RunStatus.PENDING,
@@ -43,6 +58,9 @@ class TrainingRunEntity:
             payload_hash=payload_hash,
         )
     def mark_running(self) -> None:
+        ''' 
+        Перевод в RUNNING 
+        '''
         if self.status != RunStatus.PENDING:
             raise InvalidRunTransition(
                 f'Нельзя mark_running из {self.status}'
@@ -50,6 +68,9 @@ class TrainingRunEntity:
         self.status = RunStatus.RUNNING
     
     def mark_done(self, result: dict[str, Any]) -> None:
+        '''
+        Первод в DONE и сохранение результата
+        '''
         if self.status != RunStatus.RUNNING:
             raise InvalidRunTransition(f'Нельзя mark_done из {self.status}')
         self.status = RunStatus.DONE
@@ -57,6 +78,9 @@ class TrainingRunEntity:
         self.error = None
 
     def mark_failed(self, error: str) -> None:
+        '''
+        Переводит в FAILED и сохраняет текст ошибки
+        '''
         if self.status not in (RunStatus.PENDING, RunStatus.RUNNING):
             raise InvalidRunTransition(
                 'Нельзя mark_failed из DONE'
