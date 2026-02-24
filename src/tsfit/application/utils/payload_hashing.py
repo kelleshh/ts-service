@@ -84,7 +84,7 @@ def hash_fit_auto_payload(
     tuning: TuningConfigValueObject,
 ) -> str:
     '''
-    Хэш payload для сценария /fit_auto (с автоподбором)
+    Хэш payload для сценария /fit/auto (с автоподбором)
     '''
 
     rows = canonical_rows(dataset_rows, dataset_schema)

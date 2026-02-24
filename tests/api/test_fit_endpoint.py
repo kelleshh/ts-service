@@ -92,7 +92,7 @@ def test_fit_auto_endpoint_returns_metrics_and_tuning_report() -> None:
         },
     }
 
-    r = client.post('/fit_auto', json=payload)
+    r = client.post('/fit/auto', json=payload)
     assert r.status_code == 201, r.text
     body = r.json()
 
