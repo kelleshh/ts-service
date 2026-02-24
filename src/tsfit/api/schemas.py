@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Any
 
 from tsfit.domain.value_objects import (
@@ -11,11 +11,18 @@ from tsfit.domain.value_objects import (
     TuningConfigValueObject,
 )
 from tsfit.domain.entities import RunStatus
+from tsfit.domain.rules import BASE_XGBOOST_EVAL_METRICS
 
-# DTOшки
+
+# DTO (обмен данными для API)
+
 
 class DatasetSchemaDTO(BaseModel):
+    '''
+    Схема датасета: какие ключи что означают
+    '''
     model_config = ConfigDict(extra='forbid')
+
     timestamp_col: str
     target_col: str
     series_id_col: str | None = None
@@ -29,8 +36,13 @@ class DatasetSchemaDTO(BaseModel):
             exogenous_cols=self.exogenous_cols,
         )
     
+
 class FeatureSpecDTO(BaseModel):
+    '''
+    Настройки генерации фичей (лаги, скользящие статистики и т.д.)
+    '''
     model_config = ConfigDict(extra='forbid')
+
     lags: list[int] = Field(min_length=1)
     rolling_mean_windows: list[int] = Field(default_factory=list)
     rolling_std_windows: list[int] = Field(default_factory=list)
@@ -49,7 +61,11 @@ class FeatureSpecDTO(BaseModel):
     
 
 class SplitConfigDTO(BaseModel):
+    '''
+    Настройки сплита (train/valid)
+    '''
     model_config = ConfigDict(extra='forbid')
+
     valid_fraction: float = 0.2
     min_valid_size: int = 5
     
@@ -61,7 +77,12 @@ class SplitConfigDTO(BaseModel):
 
 
 class TimeSeriesConfigDTO(BaseModel):
+    '''
+    Конфиг построения временного ряда
+    '''
+
     model_config = ConfigDict(extra='forbid')
+
     horizon: int
     features: FeatureSpecDTO
     split: SplitConfigDTO = Field(default_factory=SplitConfigDTO)
@@ -73,7 +94,11 @@ class TimeSeriesConfigDTO(BaseModel):
             split=self.split.to_domain(),
         )
     
+
 class TuningConfigDTO(BaseModel):
+    '''
+    Конфиг автоподбора гиперпараметров
+    '''
     model_config = ConfigDict(extra='forbid')
     
     n_trials: int = 20
@@ -86,7 +111,7 @@ class TuningConfigDTO(BaseModel):
         )
     
 
-class XGBParamsDTO(BaseModel):
+class XGBParamsDTO(BaseModel): # TODO: решить что с этим делать с этой схемой
     '''
     Явно описанные параметры обучения, которые мы разрешаем принимать от пользователя
     '''
@@ -123,8 +148,9 @@ class TrainingConfigDTO(BaseModel):
     Конфиг обучения по фиксированным параметрам без тюнинга
     '''
     model_config = ConfigDict(extra='forbid')
+
     xgb_params: dict[str, Any] = Field(default_factory=dict)
-    metrics: list[str] = Field(default_factory=lambda: ['rmse', 'mae']) # TODO: сделать поддержку всех метрик, доступных в xgboost
+    metrics: list[str] = Field(default_factory=lambda: ['rmse', 'mae'])
     primary_metric: str = 'rmse'
 
     def to_domain(self) -> TrainingConfigValueObject:
@@ -134,10 +160,50 @@ class TrainingConfigDTO(BaseModel):
             primary_metric=self.primary_metric,
         )
 
+    
+    @field_validator('metrics')
+    @classmethod
+    def _validate_metrics(cls, v: list[str]) -> list[str]:
+        if not isinstance(v, list) or not v:
+            raise ValueError('training.metrics должен быть непустым списком')
+
+        cleaned = [m.strip() for m in v]
+        if any(not m for m in cleaned):
+            raise ValueError('training.metrics не должен содержать пустые строки')
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError('training.metrics не должен содержать дубликаты')
+
+        unknown = [m for m in cleaned if m not in BASE_XGBOOST_EVAL_METRICS]
+        if unknown:
+            raise ValueError(
+                'training.metrics содержит неизвестные метрики: '
+                f'{unknown}. Список допустимых имен см. в документации XGBoost (eval_metric).'
+            )
+
+        return cleaned
+    
+    @field_validator('primary_metric')
+    @classmethod
+    def _validate_primary_metiric(cls, v: str, info: Any) -> str:
+        pm = v.strip() if isinstance(v, str) else ''
+        if not pm:
+            raise ValueError('training.primary_metric должен быть непустой строкой')
+        if pm not in BASE_XGBOOST_EVAL_METRICS:
+            raise ValueError(
+                'training.primary_metric содержит неизвестную метрику. '
+                'Список допустимых име см. в документации XGBoost (eval_metric).'
+            )
+        return pm
+
+
+
 
 # СХЕМЫ ВХОДА И ВЫХОДА
 
 class FitRequest(BaseModel):
+    '''
+    Тело запроса /fit
+    '''
     model_config = ConfigDict(extra='forbid')
 
     dataset: list[dict[str, Any]]
@@ -148,6 +214,9 @@ class FitRequest(BaseModel):
 
 
 class FitResponse(BaseModel):
+    '''
+    Ответ /fit
+    '''
     run_id: str
     status: RunStatus
     created: bool
@@ -156,7 +225,7 @@ class FitResponse(BaseModel):
 
 class FitAutoRequest(BaseModel):
     '''
-    Обучение с автоподбором гиперпараметров.
+    Тело запроса /fit_auto
     '''
     model_config = ConfigDict(extra='forbid')
 
@@ -169,6 +238,9 @@ class FitAutoRequest(BaseModel):
 
 
 class FitAutoResponse(BaseModel):
+    '''
+    Ответ /fit_auto
+    '''
     run_id: str
     status: RunStatus
     created: bool
