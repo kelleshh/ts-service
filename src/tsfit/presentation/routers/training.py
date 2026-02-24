@@ -58,6 +58,7 @@ async def fit(
             status=res.status,
             created=res.created,
             metrics=res.metrics,
+            data_profile=res.data_profile,
         )
     except IdempotencyConflict as e:
         raise HTTPException(status_code=s.HTTP_409_CONFLICT, detail=str(e))
@@ -93,7 +94,8 @@ async def fit_auto(
             status=res.status,
             created=res.created,
             metrics=res.metrics,
-            tuning=res.tuning,
+            data_profile=res.data_profile,
+            tuning_report=res.tuning_report,
         )
     except IdempotencyConflict as e:
         raise HTTPException(status_code=s.HTTP_409_CONFLICT, detail=str(e))
