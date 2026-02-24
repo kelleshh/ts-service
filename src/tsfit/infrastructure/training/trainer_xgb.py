@@ -7,24 +7,18 @@ from xgboost import XGBRegressor
 
 from tsfit.application.ports import BuiltDataset, ModelTrainer
 from tsfit.domain.value_objects import TrainingConfigValueObject
-from tsfit.infrastructure.training.tuning_optuna import tune_xgb_params
-
-def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    err = y_true - y_pred
-    return float(np.sqrt(np.mean(err ** 2)))
-
-
-def _mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    return float(np.mean(np.abs(y_true - y_pred)))
-
 
 class XGBModelTrainer(ModelTrainer):
     '''
-    Реализация обучателя для XGBoost
+    Инфраструктурная реализация обучателя на базе XGBoost.
 
-    Возвращает словарь с метриками, важностью фичей и параметрами
-    
-    на вход приходит TrainingConfigValueObject (фиксированные параметры)
+    Вход:
+    - BuiltDataset (готовые X_train/y_train, X_valid/y_valid)
+    - TrainingConfigValueObject (параметры + список метрик)
+
+    Выход:
+    - словарь с метриками, параметрами модели и важностью признаков
+
     '''
 
     def train_and_eval(self, dataset: BuiltDataset, training: TrainingConfigValueObject) -> dict[str, Any]:
@@ -36,6 +30,7 @@ class XGBModelTrainer(ModelTrainer):
         feature_names = dataset.feature_names
 
         user_params = dict(training.xgb_params or {})
+        user_params.pop('eval_metric', None)
 
         defaults: dict[str, Any] = {
             'objective': 'reg:squarederror',
@@ -49,23 +44,32 @@ class XGBModelTrainer(ModelTrainer):
 
         merged = {**defaults, **user_params}
 
-        model = XGBRegressor(**merged)
+        model = XGBRegressor(
+            **merged,
+            eval_metric=list(training.metrics))
+        
         model.fit(X_train, y_train, eval_set=[(X_valid, y_valid)], verbose=False)
 
-        pred = model.predict(X_valid)
-        yv = np.asarray(y_valid)
-        pv = np.asarray(pred)
+        # достает метрики на последней итреации
+        evals_result = model.evals_result()
+        valid_name = 'validation_0'
+        if valid_name not in evals_result:
+            raise ValueError('XGBoost не вернул evals_result для validation_0')
 
+        valid_metrics = evals_result[valid_name]
         metrics: dict[str, float] = {}
-        for m in training.metrics:
-            if m == 'rmse':
-                metrics[m] = _rmse(yv, pv)
-            elif m == 'mae':
-                metrics[m] = _mae(yv, pv)
-            else:
-                raise ValueError(f'Неподдерживаемая метрика: {m}')
-            
-            # TODO: сделать поддержку всех метрик
+        for requested in training.metrics:
+            if requested not in valid_metrics:
+                # Иногда XGBoost может переименовать ключ (редко)
+                # но в этом случае проще явно сообщить об ошибке
+                known = sorted(valid_metrics.keys())
+                raise ValueError(
+                    f'XGBoost не вернул метрику {requested}. Доступно: {known}'
+                )
+            series = valid_metrics[requested]
+            if not series:
+                raise ValueError(f'Пустая история значений метрики {requested}')
+            metrics[requested] = float(series[-1])
 
         # importance (топ-50 фичей)
         feature_importance: dict[str, float] = {}

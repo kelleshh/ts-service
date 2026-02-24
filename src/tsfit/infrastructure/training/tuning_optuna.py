@@ -6,6 +6,13 @@ import numpy as np
 import optuna
 from xgboost import XGBRegressor
 
+from tsfit.application.ports import BuiltDataset, HyperparameterTuner
+from tsfit.domain.value_objects import TuningConfigValueObject
+from tsfit.application.ports import BuiltDataset, HyperparameterTuner
+from tsfit.domain.value_objects import TuningConfigValueObject
+
+from tsfit.domain.metrics_invariants import is_higher_better
+
 
 def tune_xgb_params(
     *,
@@ -26,16 +33,15 @@ def tune_xgb_params(
     Возвращает (best_params, tuning_report).
     '''
 
-    def score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        err = y_true - y_pred
-        if primary_metric == 'rmse':
-            return float(np.sqrt(np.mean(err ** 2)))
-        if primary_metric == 'mae':
-            return float(np.mean(np.abs(err)))
-        raise ValueError(f'Указана незивестная метрика: {primary_metric}')
+
+    # определение направления оптимизации метрики
+    direction = 'maximize' if is_higher_better(primary_metric) else 'minimize'
+
 
     def objective(trial: optuna.Trial) -> float:
         params = dict(base_params)
+        params.pop('eval_metric', None)
+
         params.update(
             {
                 'max_depth': trial.suggest_int('max_depth', 3, 10),
@@ -48,17 +54,34 @@ def tune_xgb_params(
             }
         )
 
-        model = XGBRegressor(**params)
+        model = XGBRegressor(**params,
+                             eval_metric = primary_metric)
         model.fit(
             X_train,
             y_train,
             eval_set=[(X_valid, y_valid)],
             verbose=False,
         )
-        pred = model.predict(X_valid)
-        return score(np.asarray(y_valid), np.asarray(pred))
 
-    study = optuna.create_study(direction='minimize')
+        evals_result = model.evals_result()
+        valid_name = 'validation_0'
+        if valid_name not in evals_result:
+            raise ValueError('XGBoost не вернул evals_result для validation_0')
+
+        valid_metrics = evals_result[valid_name]
+        if primary_metric not in valid_metrics:
+            known = sorted(valid_metrics.keys())
+            raise ValueError(
+                f'XGBoost не вернул метрику {primary_metric}. Доступно: {known}'
+            )
+
+        series = valid_metrics[primary_metric]
+        if not series:
+            raise ValueError(f'Пустая история значений метрики {primary_metric}')
+
+        return float(series[-1])
+
+    study = optuna.create_study(direction=direction)
     study.optimize(objective, n_trials=n_trials, timeout=timeout_sec)
 
     best_params = dict(study.best_trial.params)
@@ -69,15 +92,11 @@ def tune_xgb_params(
     }
     return best_params, report
 
-# TODO: вынести в отдельный файл
-
-from tsfit.application.ports import BuiltDataset, HyperparameterTuner
-from tsfit.domain.value_objects import TuningConfigValueObject
 
 
 class OptunaXGBTuner(HyperparameterTuner):
     '''
-    Реализация подбора гиперпараметра через optuna
+    Инфраструктурный сервис подбора гиперпараметра через optuna
     '''
 
     def tune(
