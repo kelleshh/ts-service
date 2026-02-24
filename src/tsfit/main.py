@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from dishka.integrations.fastapi import setup_dishka
 
-from tsfit.api.routes import router as tsfit_router
+from tsfit.presentation.routes import router as tsfit_router
 from tsfit.bootstrap.di import container
 
 from contextlib import asynccontextmanager
@@ -21,7 +21,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title='XGBoost Time Series train API',
         description='Сервис для обучения XGBoost на временных рядах',
-        version='0.1.2',
+        version='0.1.3',
         lifespan=lifespan
     )
     app.include_router(tsfit_router)
