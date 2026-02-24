@@ -17,7 +17,7 @@ from tsfit.infrastructure.store.repository_inmemory import InMemoryTrainingRunRe
 from tsfit.infrastructure.dataset.builder_polars import PolarsTimeSeriesDatasetBuilder
 from tsfit.infrastructure.dataset.parser_polars import PolarsDatasetParser
 from tsfit.infrastructure.training.trainer_xgb import XGBModelTrainer
-from tsfit.infrastructure.training.tuning_optuna import OptunaXGBTuner
+from tsfit.infrastructure.training.optuna.tuner import OptunaXGBTuner
 
 
 class AppProvider(Provider):
