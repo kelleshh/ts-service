@@ -1,21 +1,26 @@
 import sys
 from pathlib import Path
-from polars import DataFrame
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'src'))
 
 import pytest
 
-pl = pytest.importorskip('polars')
+
+# Добавляем src в PYTHONPATH для тестов.
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'src'))
+
+
+try:
+    import polars as pl  # type: ignore
+except Exception:
+    pl = None
+
 
 from tsfit.domain.value_objects import (
-    DatasetSchemaValueObject, 
-    TimeSeriesConfigValueObject, 
-    FeatureSpecValueObject, 
-    SplitConfigValueObject, 
-    TrainingConfigValueObject, 
-    TuningConfigValueObject
+    DatasetSchemaValueObject,
+    TimeSeriesConfigValueObject,
+    FeatureSpecValueObject,
+    SplitConfigValueObject,
+    TrainingConfigValueObject,
 )
 
 
@@ -51,11 +56,13 @@ def training_cfg_no_tuning() -> TrainingConfigValueObject:
         xgb_params={'n_estimators': 50},
         metrics=['rmse', 'mae'],
         primary_metric='rmse',
-        tuning=TuningConfigValueObject(enabled=False),
     )
 
 
-def make_two_series_frame(n: int = 30) -> DataFrame:
+def make_two_series_frame(n: int = 30):
+    if pl is None:
+        pytest.skip('polars не установлен: пропускаем тесты, которым он нужен')
+
     rows = []
     for sid in ['A', 'B']:
         for i in range(n):
@@ -70,8 +77,7 @@ def make_two_series_frame(n: int = 30) -> DataFrame:
 
 
 @pytest.fixture()
-def two_series_frame() -> DataFrame:
-    '''
-    Небольшой датасет из двух рядов для тестов инфраструктуры
-    '''
+def two_series_frame():
+    '''Небольшой датасет из двух рядов для тестов инфраструктуры.'''
+
     return make_two_series_frame(n=30)
