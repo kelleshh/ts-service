@@ -110,8 +110,8 @@ class TuningConfigValueObject:
     def validate(self) -> None:
         if not isinstance(self.n_trials, int) or self.n_trials <= 0:
             raise ValidationError('tuning.n_trials должен быть целым числом > 0')
-        if self.n_trials > 50:
-            raise ValidationError('tuning.n_trials слишком большой (max=50)')
+        if self.n_trials > 500:
+            raise ValidationError('tuning.n_trials слишком большой (max=500)')
 
         if self.timeout_sec is not None:
             if not isinstance(self.timeout_sec, int) or self.timeout_sec <= 0:
