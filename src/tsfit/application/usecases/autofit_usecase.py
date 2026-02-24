@@ -1,8 +1,6 @@
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Any, Callable
-import hashlib
-import json
 import uuid
 
 from tsfit.application.ports import (
@@ -22,7 +20,7 @@ from tsfit.domain.value_objects import (
     TuningConfigValueObject,
     )
 from tsfit.domain.rules import rule_validate_rows_have_columns
-from tsfit.application.usecases.fit_usecase import _canonical_rows
+from tsfit.application.utils.payload_hashing import hash_fit_auto_payload
 
 
 
@@ -53,9 +51,9 @@ class TrainModelAutoResult:
 
 class TrainModelAutoUseCase:
     '''
-    Сценарий обучения XGBoost на временных рядах с автоподбором гиперпараметров.
-
-    это отдельный сценарий (отдельная ручка и отдельный юзкейс)
+    Сценарий обучения XGBoost на временных рядах с автоподбором гиперпараметров
+    - сначала подбираем параметры (tuner)
+    - затем делаем финальное обучение (trainer)
     '''
     def __init__(
         self,
@@ -76,7 +74,6 @@ class TrainModelAutoUseCase:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def execute(self, req: TrainModelAutoRequest) -> TrainModelAutoResult:
-
         # доменные проверки
         req.dataset_schema.validate()
         req.time_series.validate()
@@ -84,26 +81,16 @@ class TrainModelAutoUseCase:
         req.tuning.validate()
         rule_validate_rows_have_columns(req.dataset_rows, req.dataset_schema)
 
-        # идемпотентность и hash считаем с учетом того, что это именно AUTO-сценарий
-        # TODO: вынести хэширование как утилиту отдельно
-        rows = _canonical_rows(req.dataset_rows, req.dataset_schema)
-        payload = {
-            'mode': 'auto',
-            'dataset_rows': rows,
-            'dataset_schema': asdict(req.dataset_schema),
-            'time_series': asdict(req.time_series),
-            'training': asdict(req.training),
-            'tuning': asdict(req.tuning),
-            'payload_version': 1,
-        }
-        raw = json.dumps(
-            payload,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(',', ':'),
-        ).encode('utf-8')
-        payload_hash = hashlib.sha256(raw).hexdigest()
+        # хэш
+        payload_hash = hash_fit_auto_payload(
+            dataset_rows=req.dataset_rows,
+            dataset_schema=req.dataset_schema,
+            time_series=req.time_series,
+            training=req.training,
+            tuning=req.tuning,
+        )
 
+        # идемпотентность
         if req.idempotency_key:
             existing = self.repo.find_by_idempotency(req.idempotency_key)
             if existing:

@@ -1,11 +1,16 @@
 from dataclasses import dataclass, field
 from typing import Any
 from tsfit.domain.exceptions import ValidationError
+from tsfit.domain.rules import BASE_XGBOOST_EVAL_METRICS
 
 @dataclass(frozen=True)
 class DatasetSchemaValueObject:
     '''
     Схема колонок в датасете
+    - время
+    - целевая переменная (то, что прогнозируем)
+    - идентификатор ряда (если рядов много)
+    - какие колонки считаются экзогенными признаками
     '''
     timestamp_col: str
     target_col: str
@@ -64,6 +69,10 @@ class FeatureSpecValueObject:
 class SplitConfigValueObject:
     '''
     Конфиг сплитинга по времени
+    - ранние даты идут в train
+    - более поздние даты идут в valid
+
+    рандомное перемешивание запрещено
     '''
     valid_fraction: float = 0.2
     min_valid_size: int = 5
@@ -98,7 +107,6 @@ class TuningConfigValueObject:
 
     n_trials: int = 20
     timeout_sec: int | None = 60
-    early_stopping_rounds: int = 50 #  TODO: что то сделать с этим багом что нет такого параметра в XGBoost! (предполагаю что надо удалить нафиг)
 
     def validate(self) -> None:
         if not isinstance(self.n_trials, int) or self.n_trials <= 0:
@@ -112,44 +120,23 @@ class TuningConfigValueObject:
             if self.timeout_sec > 600:
                 raise ValidationError('tuning.timeout_sec слишком большой (max=600)')
 
-        if not isinstance(self.early_stopping_rounds, int) or self.early_stopping_rounds <= 0:
-            raise ValidationError('tuning.early_stopping_rounds должен быть целым числом > 0')
-        if self.early_stopping_rounds > 200:
-            raise ValidationError('tuning.early_stopping_rounds слишком большой (max=200)')
-
-
 @dataclass(frozen=True)
 class TrainingConfigValueObject:
     '''
     Конфиг обучения модели по фиксированному набору параметров
+
+    список метрик и primary_metric проверяем как доменный инвариант, потому что это часть контракта
     '''
 
     xgb_params: dict[str, Any] = field(default_factory=dict)
-    metrics: list[str] = field(default_factory=lambda: ['rmse', 'mae']) # TODO: добавить поддержку всех метрик тут
+    metrics: list[str] = field(default_factory=lambda: ['rmse', 'mae'])
     primary_metric: str = 'rmse'
 
     def validate(self) -> None:
         if not isinstance(self.xgb_params, dict) or any(not isinstance(k, str) for k in self.xgb_params.keys()):
             raise ValidationError('xgb_params должен быть словарём с строковыми ключами')
 
-        allowed = {'rmse', 'mae'}
-        if not isinstance(self.metrics, list) or not self.metrics:
-            raise ValidationError('metrics должен быть непустым списком')
-        if any((not isinstance(m, str)) for m in self.metrics):
-            raise ValidationError('metrics должен быть списком строк')
-        if len(set(self.metrics)) != len(self.metrics):
-            raise ValidationError('metrics не должен содержать дубликаты')
-        unknown = [m for m in self.metrics if m not in allowed]
-        if unknown:
-            raise ValidationError(f'metrics содержит неизвестные метрики: {unknown}. Допустимо: {sorted(allowed)}')
-
-        if self.primary_metric not in allowed:
-            raise ValidationError(f'primary_metric должен быть одной из {sorted(allowed)}')
-        if self.primary_metric not in self.metrics:
-            raise ValidationError('primary_metric должен входить в metrics')
-
-
-        allowed = {'rmse', 'mae'} # TODO: добавить поддержку всех метрик тут (сам список можно вынести в доменный слой, ведь это часть домена?)
+        allowed = BASE_XGBOOST_EVAL_METRICS
         if not isinstance(self.metrics, list) or not self.metrics:
             raise ValidationError('metrics должен быть непустым списком')
         if any((not isinstance(m, str)) for m in self.metrics):

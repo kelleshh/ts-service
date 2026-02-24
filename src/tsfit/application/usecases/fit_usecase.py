@@ -1,8 +1,6 @@
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Any, Callable
-import hashlib
-import json
 import uuid
 
 from tsfit.application.ports import (
@@ -20,6 +18,7 @@ from tsfit.domain.value_objects import (
     TrainingConfigValueObject,
     )
 from tsfit.domain.rules import rule_validate_rows_have_columns
+from tsfit.application.utils.payload_hashing import hash_fit_payload
 
 
 @dataclass(frozen=True)
@@ -45,39 +44,17 @@ class TrainModelResult:
     metrics: dict[str, float] | None
 
 
-def _canonical_rows(rows: list[dict[str, Any]], schema: DatasetSchemaValueObject) -> list[dict[str, Any]]:
-    '''
-    Приводит строки к единому каноничному виду для корректного хэширования
-    '''
-    ts = schema.timestamp_col
-    sid = schema.series_id_col
-
-    if sid:
-        return sorted(rows, key=lambda r: (str(r.get(sid)), str(r.get(ts))))
-    return sorted(rows, key=lambda r: str(r.get(ts)))
-
-
-def _hash_payload(req: TrainModelRequest) -> str:
-    rows = _canonical_rows(req.dataset_rows, req.dataset_schema)
-    payload = {
-        'dataset_rows': rows,
-        'dataset_schema': asdict(req.dataset_schema),
-        'time_series': asdict(req.time_series),
-        'training': asdict(req.training),
-        'payload_version': 1,
-    }
-    raw = json.dumps(
-        payload,
-        sort_keys=True,
-        ensure_ascii=False,
-        separators=(',', ':'),
-    ).encode('utf-8')
-    return hashlib.sha256(raw).hexdigest()
-
-
 class TrainModelUseCase:
     '''
     Сценарий для обучения модели XGBoost по временному ряду и возвращения метрик
+    Последовательность:
+    1) доменные провеки
+    2) расчет хэша
+    3) идемпотентность по idempotency_key
+    4) созданиеTrainingRunEntity
+    5) парсинг данных и сборка датасета + препроцессинг
+    6) обучение модели и расчет метрик
+    7) сохранение в репозитр
     '''
     def __init__(
         self,
@@ -103,7 +80,13 @@ class TrainModelUseCase:
         req.training.validate()
         rule_validate_rows_have_columns(req.dataset_rows, req.dataset_schema)
 
-        payload_hash = _hash_payload(req)
+        # хэш
+        payload_hash = hash_fit_payload(
+            dataset_rows=req.dataset_rows,
+            dataset_schema=req.dataset_schema,
+            time_series=req.time_series,
+            training=req.training,
+        )
 
         # идемпотентность
         
