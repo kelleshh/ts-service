@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any
 from tsfit.domain.exceptions import ValidationError
-from tsfit.domain.metrics_invariants import BASE_XGBOOST_EVAL_METRICS
 
 @dataclass(frozen=True)
 class DatasetSchemaValueObject:
@@ -125,29 +124,34 @@ class TrainingConfigValueObject:
     '''
     Конфиг обучения модели по фиксированному набору параметров
 
-    список метрик и primary_metric проверяем как доменный инвариант, потому что это часть контракта
+    model_params: словарь параметров обучателя (например: глубина деревьев, скорость обучения и т.п.)
+
+    metrics / primary_metric: метрики качества и главная метрика
+
+    доменная проверка: список не пустой, без дублей, primary_metric входит в metrics
     '''
 
-    xgb_params: dict[str, Any] = field(default_factory=dict)
+    model_params: dict[str, Any] = field(default_factory=dict)
     metrics: list[str] = field(default_factory=lambda: ['rmse', 'mae'])
     primary_metric: str = 'rmse'
 
     def validate(self) -> None:
-        if not isinstance(self.xgb_params, dict) or any(not isinstance(k, str) for k in self.xgb_params.keys()):
-            raise ValidationError('xgb_params должен быть словарём с строковыми ключами')
-
-        allowed = BASE_XGBOOST_EVAL_METRICS
+        if not isinstance(self.model_params, dict) or any(not isinstance(k, str) for k in self.model_params.keys()):
+            raise ValidationError('model_params должен быть словарём с строковыми ключами')
+        
         if not isinstance(self.metrics, list) or not self.metrics:
             raise ValidationError('metrics должен быть непустым списком')
         if any((not isinstance(m, str)) for m in self.metrics):
             raise ValidationError('metrics должен быть списком строк')
-        if len(set(self.metrics)) != len(self.metrics):
+        
+        cleaned = [m.strip() for m in self.metrics]
+        if any(not m for m in cleaned):
+            raise ValidationError('metrics не должен содержать пустые строки')
+        if len(set(cleaned)) != len(cleaned):
             raise ValidationError('metrics не должен содержать дубликаты')
-        unknown = [m for m in self.metrics if m not in allowed]
-        if unknown:
-            raise ValidationError(f'metrics содержит неизвестные метрики: {unknown}. Допустимо: {sorted(allowed)}')
-
-        if self.primary_metric not in allowed:
-            raise ValidationError(f'primary_metric должен быть одной из {sorted(allowed)}')
-        if self.primary_metric not in self.metrics:
+        
+        pm = self.primary_metric.strip() if isinstance(self.primary_metric, str) else ''
+        if not pm:
+            raise ValidationError('primary_metric должен быть непустой строкой')
+        if pm not in cleaned:
             raise ValidationError('primary_metric должен входить в metrics')

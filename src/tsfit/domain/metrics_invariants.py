@@ -1,32 +1,3 @@
-# доменные базовые метрики xgboost (инвариант)
-
-BASE_XGBOOST_EVAL_METRICS: frozenset[str] = frozenset(
-    {
-        'rmse',
-        'rmsle',
-        'mae',
-        'mape',
-        'mphe',
-        'logloss',
-        'error',
-        'merror',
-        'mlogloss',
-        'auc',
-        'aucpr',
-        'pre',
-        'ndcg',
-        'map',
-        'poisson-nloglik',
-        'gamma-nloglik',
-        'cox-nloglik',
-        'gamma-deviance',
-        'tweedie-nloglik',
-        'aft-nloglik',
-        'interval-regression-accuracy',
-    }
-)
-
-
 # метрики, где 'больше = лучше'
 # все остальные считается 'меньше = лучше'
 MAXIMIZE_METRICS_PREFIXES: tuple[str, ...] = (
