@@ -228,6 +228,66 @@ class TrainingConfigDTO(BaseModel):
                 f'Допустимо: {sorted(ALLOWED_EVAL_METRICS)}'
             )
         return pm
+    
+
+class DataProfileDTO(BaseModel):
+    '''
+    Профиль данных после построения признаков
+
+    Фиксированная часть результата: по этим числам можно 
+    понять, насколько много данных реально дошло до обучения
+    '''
+
+    model_config = ConfigDict(extra='forbid')
+
+    n_rows_raw: int
+    n_total_after_features: int
+    n_train: int
+    n_valid: int
+    n_features: int
+
+
+class Stage1CandidateDTO(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    learning_rate: float
+    best_iteration: int
+    best_value: float
+
+
+class Stage1ReportDTO(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    learning_rates: list[float]
+    candidates: list[Stage1CandidateDTO]
+    chosen_learning_rate: float
+    chosen_n_estimators: int
+    chosen_best_value: float
+
+
+class Stage2ReportDTO(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    direction: str
+    n_trials_requested: int
+    n_trials_used: int
+    n_trials_ran: int
+    best_value: float
+    best_params: dict[str, Any]
+
+
+class TuningReportDTO(BaseModel):
+    '''
+    Отчет о подборе параметров
+    '''
+
+    model_config = ConfigDict(extra='allow') # на будущее если отчет расширять
+
+    strategy_used: str
+    data_bucket: str
+    data_profile: DataProfileDTO
+    stage1: Stage1ReportDTO
+    stage2: Stage2ReportDTO
 
 # СХЕМЫ ВХОДА И ВЫХОДА
 
@@ -255,6 +315,7 @@ class FitResponse(BaseModel):
     status: RunStatus
     created: bool
     metrics: dict[str, float] | None = None
+    data_profile: DataProfileDTO | None = None
 
 
 class FitAutoRequest(BaseModel):
@@ -281,6 +342,7 @@ class FitAutoResponse(BaseModel):
     status: RunStatus
     created: bool
     metrics: dict[str, float] | None = None
+    data_profile: DataProfileDTO | None = None
     
     # краткий отчет о подборе
-    tuning: dict[str, Any] | None = None
+    tuning_report: TuningReportDTO | None = None
