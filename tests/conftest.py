@@ -53,7 +53,7 @@ def ts_cfg_basic() -> TimeSeriesConfigValueObject:
 @pytest.fixture()
 def training_cfg_no_tuning() -> TrainingConfigValueObject:
     return TrainingConfigValueObject(
-        xgb_params={'n_estimators': 50},
+        model_params={'n_estimators': 50},
         metrics=['rmse', 'mae'],
         primary_metric='rmse',
     )

@@ -38,7 +38,7 @@ def test_fit_endpoint_returns_metrics() -> None:
             'split': {'valid_fraction': 0.2, 'min_valid_size': 3},
         },
         'training': {
-            'xgb_params': {'n_estimators': 10, 'max_depth': 3},
+            'model_params': {'n_estimators': 10, 'max_depth': 3},
             'metrics': ['rmse', 'mae'],
             'primary_metric': 'rmse',
         },
@@ -81,7 +81,7 @@ def test_fit_auto_endpoint_returns_metrics_and_tuning_report() -> None:
             'split': {'valid_fraction': 0.2, 'min_valid_size': 3},
         },
         'training': {
-            'xgb_params': {'n_estimators': 30, 'max_depth': 3},
+            'model_params': {'n_estimators': 30, 'max_depth': 3},
             'metrics': ['rmse', 'mae'],
             'primary_metric': 'rmse',
         },
