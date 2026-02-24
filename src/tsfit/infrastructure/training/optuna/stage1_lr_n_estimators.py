@@ -1,12 +1,115 @@
 from __future__ import annotations
 
 from typing import Any
-
+import inspect
 from xgboost import XGBRegressor
 
 from tsfit.domain.metrics_invariants import is_higher_better
-
 from tsfit.infrastructure.training.optuna.eval_helpers import pick_best
+
+
+def _make_model_with_optional_early_stopping(
+    *,
+    params: dict[str, Any],
+    primary_metric: str,
+    early_stopping_rounds: int,
+) -> XGBRegressor:
+    '''
+    Создает XGBRegressor и, если возможно, настраивает раннюю остановку
+
+    
+    !!! в разных версиях может отсутствовать early_stopping_round параметр, 
+    тогда делаем через callbacks (либо через fit либо через конструктор)
+
+    Мы делаем совместимость по сигнатурам инита
+    '''
+
+    init_sig = inspect.signature(XGBRegressor.__init__)
+    maximize = bool(is_higher_better(primary_metric))
+
+    # попытка 1: early_stopping_rounds в конструкторе
+    if 'early_stopping_rounds' in init_sig.parameters:
+        return XGBRegressor(
+            **params,
+            eval_metric=primary_metric,
+            early_stopping_rounds=int(early_stopping_rounds),
+        )
+
+    # попытка 2: callbacks в конструкторе
+    if 'callbacks' in init_sig.parameters:
+        try:
+            from xgboost.callback import EarlyStopping # а то ругается гад
+        except Exception:
+            EarlyStopping = None
+
+        if EarlyStopping is not None:
+            cb = EarlyStopping(
+                rounds=int(early_stopping_rounds),
+                save_best=True,
+                maximize=maximize,
+            )
+            return XGBRegressor(
+                **params,
+                eval_metric=primary_metric,
+                callbacks=[cb],
+            )
+
+    # если в конструкторе нет то создаем без ранней остановки
+    # а раннюю остановку попробуем задать в fit() далее
+    return XGBRegressor(
+        **params,
+        eval_metric=primary_metric,
+    )
+
+
+def _fit_with_optional_early_stopping(
+    *,
+    model: XGBRegressor,
+    X_train: Any,
+    y_train: Any,
+    X_valid: Any,
+    y_valid: Any,
+    primary_metric: str,
+    early_stopping_rounds: int,
+) -> None:
+    '''
+    Запускает fit и, если версия поддерживает, добавляет раннюю остановку через fit()
+    '''
+
+    fit_sig = inspect.signature(model.fit)
+    maximize = bool(is_higher_better(primary_metric))
+
+    fit_kwargs: dict[str, Any] = {
+        'eval_set': [(X_valid, y_valid)],
+        'verbose': False,
+    }
+
+    # попытка 3: early_stopping_rounds в fit()
+    if 'early_stopping_rounds' in fit_sig.parameters:
+        fit_kwargs['early_stopping_rounds'] = int(early_stopping_rounds)
+        model.fit(X_train, y_train, **fit_kwargs)
+        return
+
+    # попытка 4: callbacks в fit()
+    if 'callbacks' in fit_sig.parameters:
+        try:
+            from xgboost.callback import EarlyStopping
+        except Exception:
+            EarlyStopping = None
+
+        if EarlyStopping is not None:
+            cb = EarlyStopping(
+                rounds=int(early_stopping_rounds),
+                save_best=True,
+                maximize=maximize,
+            )
+            fit_kwargs['callbacks'] = [cb]
+            model.fit(X_train, y_train, **fit_kwargs)
+            return
+
+    # иначе без ранней остановки ):
+    model.fit(X_train, y_train, **fit_kwargs)
+
 
 
 def pick_learning_rate_and_n_estimators(
@@ -26,7 +129,7 @@ def pick_learning_rate_and_n_estimators(
 
     Алгоритм:
     - для каждого learning_rate обучаем модель с большим n_estimators
-    - включаем раннюю остановку
+    - включаем раннюю остановку (если поддерживается)
     - на валидации ищем лучшую итерацию
 
     Возвращает:
@@ -44,12 +147,19 @@ def pick_learning_rate_and_n_estimators(
         params['n_estimators'] = int(max_estimators)
         params.setdefault('n_jobs', 1)
 
-        model = XGBRegressor(**params, eval_metric=primary_metric)
-        model.fit(
-            X_train,
-            y_train,
-            eval_set=[(X_valid, y_valid)],
-            verbose=False,
+        model = _make_model_with_optional_early_stopping(
+            params=params,
+            primary_metric=primary_metric,
+            early_stopping_rounds=int(early_stopping_rounds),
+        )
+
+        _fit_with_optional_early_stopping(
+            model=model,
+            X_train=X_train,
+            y_train=y_train,
+            X_valid=X_valid,
+            y_valid=y_valid,
+            primary_metric=primary_metric,
             early_stopping_rounds=int(early_stopping_rounds),
         )
 
@@ -77,7 +187,7 @@ def pick_learning_rate_and_n_estimators(
     if not candidates:
         raise ValueError('learning_rate_grid пустой')
 
-    # ыыбираем лучшего кандидата
+    # выбираем лучшего кандидата
     chosen = candidates[0]
     for c in candidates[1:]:
         if higher:
