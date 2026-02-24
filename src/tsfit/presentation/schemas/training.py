@@ -11,11 +11,34 @@ from tsfit.domain.value_objects import (
     TuningConfigValueObject,
 )
 from tsfit.domain.entities import RunStatus
-from tsfit.domain.metrics_invariants import BASE_XGBOOST_EVAL_METRICS
 
+ALLOWED_EVAL_METRICS: frozenset[str] = frozenset(
+    {
+        'rmse',
+        'rmsle',
+        'mae',
+        'mape',
+        'mphe',
+        'logloss',
+        'error',
+        'merror',
+        'mlogloss',
+        'auc',
+        'aucpr',
+        'pre',
+        'ndcg',
+        'map',
+        'poisson-nloglik',
+        'gamma-nloglik',
+        'cox-nloglik',
+        'gamma-deviance',
+        'tweedie-nloglik',
+        'aft-nloglik',
+        'interval-regression-accuracy',
+    }
+)
 
 # DTO (обмен данными для API)
-
 
 class DatasetSchemaDTO(BaseModel):
     '''
@@ -116,7 +139,7 @@ class TuningConfigDTO(BaseModel):
         )
 
 
-class XGBParamsDTO(BaseModel):
+class ModelParamsDTO(BaseModel):
     '''
     Явно описанные параметры обучения, которые мы разрешаем принимать от пользователя
     '''
@@ -143,7 +166,7 @@ class XGBParamsDTO(BaseModel):
     # воспроизводимость
     random_state: int | None = None
 
-    def to_xgb_params(self) -> dict[str, Any]:
+    def to_model_params(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
         for k, v in self.model_dump().items():
             if v is not None:
@@ -155,19 +178,19 @@ class TrainingConfigDTO(BaseModel):
     '''
     Конфиг обучения по фиксированным параметрам без тюнинга.
 
-    - запрещаются неизвестные параметры через XGBParamsDTO
+    - запрещаются неизвестные параметры через modelParamsDTO
     - проверка корректности имен метрик по инвариантам
     '''
 
     model_config = ConfigDict(extra='forbid')
 
-    xgb_params: XGBParamsDTO = Field(default_factory=XGBParamsDTO)
+    model_params: ModelParamsDTO = Field(default_factory=ModelParamsDTO)
     metrics: list[str] = Field(default_factory=lambda: ['rmse', 'mae'])
     primary_metric: str = 'rmse'
 
     def to_domain(self) -> TrainingConfigValueObject:
         return TrainingConfigValueObject(
-            xgb_params=self.xgb_params.to_xgb_params(),
+            model_params=self.model_params.to_model_params(),
             metrics=self.metrics,
             primary_metric=self.primary_metric,
         )
@@ -184,11 +207,11 @@ class TrainingConfigDTO(BaseModel):
         if len(set(cleaned)) != len(cleaned):
             raise ValueError('training.metrics не должен содержать дубликаты')
 
-        unknown = [m for m in cleaned if m not in BASE_XGBOOST_EVAL_METRICS]
+        unknown = [m for m in cleaned if m not in ALLOWED_EVAL_METRICS]
         if unknown:
             raise ValueError(
                 'training.metrics содержит неизвестные метрики: '
-                f'{unknown}. Допустимые имена см. в документации XGBoost (eval_metric).'
+                f'{unknown}. Допустимо: {sorted(ALLOWED_EVAL_METRICS)}'
             )
 
         return cleaned
@@ -199,13 +222,12 @@ class TrainingConfigDTO(BaseModel):
         pm = v.strip() if isinstance(v, str) else ''
         if not pm:
             raise ValueError('training.primary_metric должен быть непустой строкой')
-        if pm not in BASE_XGBOOST_EVAL_METRICS:
+        if pm not in ALLOWED_EVAL_METRICS:
             raise ValueError(
                 'training.primary_metric содержит неизвестную метрику. '
-                'Допустимые имена см. в документации XGBoost (eval_metric).'
+                f'Допустимо: {sorted(ALLOWED_EVAL_METRICS)}'
             )
         return pm
-
 
 # СХЕМЫ ВХОДА И ВЫХОДА
 
