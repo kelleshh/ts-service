@@ -53,6 +53,8 @@ def tune_xgb_params(
                 'reg_lambda': trial.suggest_float('reg_lambda', 0.0, 10.0),
             }
         )
+        # см. комментарий в trainer_xgb: в некоторых окружениях многопоточность может зависать поэтому ставим безопасное значение
+        params.setdefault('n_jobs', 1)
 
         model = XGBRegressor(**params,
                              eval_metric = primary_metric)

@@ -140,6 +140,7 @@ class TrainModelAutoUseCase:
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
                 'random_state': 42,
+                'n_jobs': 1,
             }
             user_params = dict(req.training.xgb_params or {})
             base_params = {**defaults, **user_params}

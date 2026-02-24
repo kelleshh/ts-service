@@ -40,6 +40,8 @@ class XGBModelTrainer(ModelTrainer):
             'subsample': 0.8,
             'colsample_bytree': 0.8,
             'random_state': 42,
+            # в некоторых оркужениях (типа CI/ограниченные контейнеры) многопоточность у хгбуст может зависать, поэтому ставим дефлот n_jobs=1 но пользователь может таки переопределить
+            'n_jons': 1,
         }
 
         merged = {**defaults, **user_params}
