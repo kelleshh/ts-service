@@ -80,7 +80,7 @@ class ModelTrainer(Protocol):
     def train_and_eval(
         self,
         dataset: BuiltDataset,
-        training: Any,
+        training: TrainingConfigValueObject,
     ) -> dict[str, Any]:
         '''Обучает модель и возвращает результат (метрики и тд)'''
         ...
