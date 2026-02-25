@@ -99,6 +99,9 @@ def test_fit_auto_endpoint_returns_metrics_and_tuning_report() -> None:
     assert 'run_id' in body
     assert body['metrics'] is not None
     assert 'rmse' in body['metrics']
-    assert 'tuning' in body
-    assert body['tuning'] is not None
-    assert 'best_params' in body['tuning']
+
+    assert 'tuning_report' in body
+    assert body['tuning_report'] is not None
+    assert 'stage2' in body['tuning_report']
+    assert body['tuning_report']['stage2'] is not None
+    assert 'best_params' in body['tuning_report']['stage2']
