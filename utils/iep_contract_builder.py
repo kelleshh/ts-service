@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from utils.parsing import ParseError, parse_date_to_iso_z, parse_float_like
+from parsing import ParseError, parse_date_to_iso_z, parse_float_like
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +51,7 @@ def _default_tuning_config() -> dict[str, Any]:
     }
 
 
+# TODO: добавить нормальную документацию параметров, т.к. это пользовательская утилита
 def build_fit_request_payload(
     iep_rows: list[dict[str, Any]],
     *,
