@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from parsing import ParseError, parse_date_to_iso_z, parse_float_like
+from .parsing import ParseError, parse_date_to_iso_z, parse_float_like
 
 
 @dataclass(frozen=True, slots=True)
