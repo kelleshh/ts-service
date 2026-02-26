@@ -145,13 +145,11 @@ class PolarsDatasetParser(DatasetParser):
 
         bad_ts = df.filter(pl.col(ts).is_null())
         if bad_ts.height > 0:
-            examples = bad_ts.select(['_row', '_ts_raw']).head(5).to_dicts()
-            raise ValidationError(f'timestamp не парсится в datetime (первые 5): {examples}')
+            raise ValidationError(f'timestamp не парсится в datetime')
 
         # проверка на не null таргета
         if df.filter(pl.col(targ).is_null()).height > 0:
-            idxs = df.filter(pl.col(targ).is_null()).select(pl.int_range(0, pl.len()).alias('_i')).head(5)
-            raise ValidationError(f'target содержит пропуски (первые 5): {idxs.to_dicts()}')
+            raise ValidationError(f'target содержит пропуски')
         
         # сортировка
         to_sort_cols = [ts] if not sid else [sid, ts]
@@ -167,6 +165,6 @@ class PolarsDatasetParser(DatasetParser):
                    .len()
                    .filter(pl.col('len') > 1))
         if dup.height > 0:
-            raise ValidationError(f'Есть дубли timestamp (первые 10): {dup.head(10).to_dicts()}')
+            raise ValidationError(f'Есть дубли timestamp (первые 10)')
 
         return df
