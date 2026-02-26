@@ -147,24 +147,24 @@ class ModelParamsDTO(BaseModel):
 
     # базовые
     objective: str | None = None
-    n_estimators: int | None = None
-    learning_rate: float | None = None
-    max_depth: int | None = None
+    n_estimators: int | None = Field(default=None, ge=1)
+    learning_rate: float | None = Field(default=None, gt=0.0)
+    max_depth: int | None = Field(default=None, ge=1)
 
     # выбор подвыборок
-    subsample: float | None = None
-    colsample_bytree: float | None = None
+    subsample: float | None = Field(default=None, gt=0.0, le=1.0)
+    colsample_bytree: float | None = Field(default=None, gt=0.0, le=1.0)
 
     # регуляризация
-    min_child_weight: float | None = None
-    reg_alpha: float | None = None
-    reg_lambda: float | None = None
+    min_child_weight: float | None = Field(default=None, ge=0.0)
+    reg_alpha: float | None = Field(default=None, ge=0.0)
+    reg_lambda: float | None = Field(default=None, ge=0.0)
 
     # параллелизм
-    n_jobs: int | None = None
+    n_jobs: int | None = Field(default=None, ge=1)
 
     # воспроизводимость
-    random_state: int | None = None
+    random_state: int | None = Field(default=None, ge=0)
 
     def to_model_params(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -324,13 +324,12 @@ class FitAutoRequest(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
-    dataset: list[dict[str, Any]]
+    dataset: list[dict[str, Any]] = Field(max_length=2_000_000)
     dataset_schema: DatasetSchemaDTO
     ts: TimeSeriesConfigDTO
     training: TrainingConfigDTO = Field(default_factory=TrainingConfigDTO)
     tuning: TuningConfigDTO = Field(default_factory=TuningConfigDTO)
-    idempotency_key: str | None = None
-
+    idempotency_key: str | None = Field(default=None, max_length=128)
 
 class FitAutoResponse(BaseModel):
     '''
