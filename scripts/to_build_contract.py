@@ -2,32 +2,47 @@ from utils.iep_contract_builder import build_fit_request_payload
 
 import json
 import os
+import math
 
 '''
 ЭТО СЛУЖЕБНЫЙ КОНСТРУКТОР ДЛЯ СОЗДАНИЯ JSON-КОНТРАКТА
 ИЗ СЫРОГО ВРЕМЕННОГО РЯДА (JSON-ФАЙЛ)
 '''
 
-RAW_FILE = 'scripts/raw_timeseries/micex_rts_index.json'   # <- здесь менять файл сырой
+RAW_FILE = 'scripts/raw_timeseries/bonds_yield.json'   # <- здесь менять файл сырой
 
-os.makedirs('created_contracts', exist_ok=True)
+
 base = os.path.splitext(os.path.basename(RAW_FILE))[0]
 OUT_FILE = f'scripts/created_contracts/{base}_contract.json'
 
 with open(RAW_FILE, 'r', encoding='utf-8') as f:
     iep_rows = json.load(f)
+
 if isinstance(iep_rows, dict) and 'rows' in iep_rows:
     iep_rows = iep_rows['rows']
 
+
+# ПРЕДПОЛАГАЕТСЯ ЧТО ПРИХОДЯЩИЙ JSON БЕЗ ПРОПУСКОВ. ОБРАБОТКУ ПРОПУСКОВ, ВЫБРОСОВ И Т.Д. ЛУЧШЕ ДЕЛАТЬ В ОТДЕЛЬНОМ ЭНДПОИНТЕ /preprocess, ЧТОБЫ НЕ СМЕШИВАТЬ ОТВЕТСТВЕННОСТИ
+iep_rows = [
+    row for row in iep_rows
+    if all(
+        not (
+            (isinstance(v, (int, float)) and not math.isfinite(v)) or
+            (isinstance(v, str) and v.strip().lower() in {'nan', 'inf', '-inf'})
+        )
+        for v in row.values()
+    )
+]
+
 contract = build_fit_request_payload(
     iep_rows=iep_rows, # type: ignore
-    endpoint='fit_auto',
+    endpoint='fit',
     horizon=1,
     date_key='date',
     drop_keys=('dataset',),
     timestamp_col='ds',
     target_col='y',
-    target_source_col='Индекс Public Joint-Stock Company Moscow Exchange MICEX-RTS (MOEX.ME): цена закрытия',
+    target_source_col='Долгосрочная доходность по облигациям.',
     ts={
         'horizon': 1,
         'features': {
@@ -45,17 +60,20 @@ contract = build_fit_request_payload(
     },
     training={
         'model_params': {
-            # 'n_estimators': 200,
+            'n_estimators': 300,
+            'learning_rate': 0.04,
+            'max_depth': 6,
+            'subsample': 0.8,
+            'colsample_bytree': 0.7,
             'random_state': 42,
-            'n_jobs': 1,
         },
         'metrics': ['rmse', 'mae', 'mape'],
         'primary_metric': 'rmse',
     },
-    tuning={
-        'n_trials': 150,
-        'timeout_sec': 45,
-    },
+#    tuning={
+#        'n_trials': 150,
+#        'timeout_sec': 45,
+#    },
 )
 
 with open(OUT_FILE, 'w', encoding='utf-8') as f:
