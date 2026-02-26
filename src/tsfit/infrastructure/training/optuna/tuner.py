@@ -77,13 +77,6 @@ class OptunaXGBTuner(HyperparameterTuner):
             'strategy_used': str(policy.name),
             'data_bucket': str(policy.data_bucket),
             'policy': policy_debug_dict(policy),
-            'data_profile': {
-                'n_rows_raw': profile.n_rows_raw,
-                'n_total_after_features': profile.n_total_after_features,
-                'n_train': profile.n_train,
-                'n_valid': profile.n_valid,
-                'n_features': profile.n_features,
-            },
             'stage1': stage1_report,
             'stage2': stage2_report,
         }

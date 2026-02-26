@@ -285,7 +285,6 @@ class TuningReportDTO(BaseModel):
 
     strategy_used: str
     data_bucket: str
-    data_profile: DataProfileDTO
     stage1: Stage1ReportDTO
     stage2: Stage2ReportDTO
 
