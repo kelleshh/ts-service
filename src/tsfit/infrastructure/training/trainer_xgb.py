@@ -34,6 +34,7 @@ class XGBModelTrainer(ModelTrainer):
 
         model = XGBRegressor(
             **params,
+            early_stopping_rounds = 50,
             eval_metric=list(training.metrics))
         
         # метрики считаем и на train, и на valid
