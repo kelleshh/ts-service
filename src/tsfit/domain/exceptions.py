@@ -1,29 +1,21 @@
+from __future__ import annotations
+
+
 class DomainError(Exception):
-    '''
-    Ошибка уровня доменных правил (инварианты)
-    '''
-    pass
+    '''Базовая ошибка домена'''
+
 
 class ValidationError(DomainError):
-    '''
-    Некорректный вход
-    '''
-    pass
+    '''Ошибка валидации входных данных'''
 
-class IdempotencyConflict(DomainError):
-    '''
-    Один и тот же ключ идемпотентности, но разные данные
-    '''
-    pass
 
-class InvalidRunTransition(DomainError):
-    '''
-    Недопустимый переход статуса запуска
-    '''
-    pass
+class InvariantError(DomainError):
+    '''Нарушение инварианта (жесткого правила)'''
 
-class TrainingFailed(DomainError):
-    '''
-    Обучение упало по внутренней причине
-    '''
-    pass
+
+class ConflictError(DomainError):
+    '''Конфликт идемпотентности или состояния'''
+
+
+class NotFoundError(DomainError):
+    '''Не найден ресурс (например model_id)'''
