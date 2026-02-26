@@ -66,7 +66,7 @@ class FeatureSpecDTO(BaseModel):
     Настройки генерации признаков (лаги, скользящие статистики и т.д.)
     '''
 
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='allow') 
 
     lags: list[int] = Field(min_length=1)
     rolling_mean_windows: list[int] = Field(default_factory=list)

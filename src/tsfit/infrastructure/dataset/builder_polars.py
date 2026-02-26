@@ -3,10 +3,120 @@ from __future__ import annotations
 from typing import Sequence
 
 import polars as pl
+import numpy as np
 
 from tsfit.application.ports import BuiltDataset, Frame, TimeSeriesDatasetBuilder
 from tsfit.domain.value_objects import DatasetSchemaValueObject, TimeSeriesConfigValueObject
 from tsfit.domain.exceptions import ValidationError
+
+# хелперы для проверки распределения
+
+def _is_exponential_series(y: np.ndarray) -> bool:
+    '''
+    Простая эвристика: ряд похож на экспоненту, если
+    1) отношения соседних значений y[t] / y[t-1] почти постоянны
+    2) в логарифмах ряд почти линейный (log(y) ~~ a + b*t)
+
+    Это нужно чтобы включать дополнительные преобразования признаков там где они чаще всего дают пользу
+    '''
+
+    y = np.asarray(y, dtype=float)
+    y = y[np.isfinite(y)]
+
+    # слишком короткий ряд => не делаем выводов
+    if y.size < 12:
+        return False
+
+    # логарифм требует положительности. Если есть отрицательные/нули, то
+    # сдвигаем весь ряд вверх (одинаково для всех значений).
+    mn = float(np.min(y))
+    if not np.isfinite(mn):
+        return False
+
+    eps = 1e-9
+    if mn <= 0.0:
+        y = y - mn + eps
+
+    # отношения соседних точек: для чистой экспоненты они константны
+    prev = y[:-1]
+    curr = y[1:]
+    good = (prev > 0.0) & np.isfinite(prev) & np.isfinite(curr)
+    if int(np.sum(good)) < 10:
+        return False
+
+    ratios = curr[good] / prev[good]
+    ratios = ratios[np.isfinite(ratios)]
+    if ratios.size < 10:
+        return False
+
+    mean_r = float(np.mean(ratios))
+    std_r = float(np.std(ratios, ddof=0))
+
+    # если средний множитель почти 1, это не экспонента, а почти константа
+    if abs(mean_r - 1.0) < 0.01:
+        return False
+
+    cv = std_r / (abs(mean_r) + eps)
+
+    # дополнительно: логарифм ряда должен хорошо объясняться прямой
+    logy = np.log(y)
+    t = np.arange(logy.size, dtype=float)
+    A = np.vstack([t, np.ones_like(t)]).T
+    coef, *_ = np.linalg.lstsq(A, logy, rcond=None)
+    pred = A @ coef
+    ss_res = float(np.sum((logy - pred) ** 2))
+    ss_tot = float(np.sum((logy - float(np.mean(logy))) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+
+    # (эвристика) пороги подобраны так, чтобы линейные/полиномиальные тренды обычно не попадали в "экспоненциальные"
+    return (cv <= 0.08) and (r2 >= 0.93)
+
+
+def _should_add_exp_features(df: pl.DataFrame, targ_col: str, sid_col: str | None) -> bool:
+    '''
+    Решение на уровне всего датасета: добавлять ли лог/эксп преобразования
+
+    Если рядов несколько (есть series_id), то достаточно чтобы хотя бы один ряд
+    был похож на экспоненту
+    '''
+
+    if sid_col:
+        grouped = (
+            df.group_by(sid_col)
+            .agg(pl.col(targ_col).cast(pl.Float64).alias('_y'))
+        )
+        for row in grouped.iter_rows(named=True):
+            y_list = row.get('_y')
+            if y_list is None:
+                continue
+            if _is_exponential_series(np.asarray(y_list, dtype=float)):
+                return True
+        return False
+
+    y = df.select(pl.col(targ_col).cast(pl.Float64)).to_series().to_numpy()
+    return _is_exponential_series(y)
+
+
+def _signed_log1p(expr: pl.Expr) -> pl.Expr:
+    abs_x = expr.abs()
+    # sign(0) = 0 => 0 * log1p(0) = 0
+    return pl.when(expr >= 0).then(abs_x.log1p()).otherwise(-abs_x.log1p())
+
+
+def _exp_scaled(expr: pl.Expr, scale: float) -> pl.Expr:
+    # нормируем и ограничиваем
+    s = float(scale) if np.isfinite(scale) and float(scale) > 0.0 else 1.0
+    z = expr / pl.lit(s)
+    z = (
+        pl.when(z > pl.lit(10.0)).then(pl.lit(10.0))
+        .when(z < pl.lit(-10.0)).then(pl.lit(-10.0))
+        .otherwise(z)
+    )
+    return z.exp()
+
+
+
+
 
 class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
     '''
@@ -84,18 +194,34 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
             raise ValidationError('Данных недостаточно: min_len <= horizon в одной из серий')
         if max_hist >= (min_len - h):
             raise ValidationError('Слишком большая глубина истории (lags/rolling/diff) для min_len и horizon')
+        
+        # решение - добавлять ли лог/эксп признаки
+        use_exp_features = _should_add_exp_features(df, targ_col=targ_col, sid_col=sid_col)
 
+        # масштаб для экспрненциальных преобразований
+        scale_for_exp = 1.0
+        if use_exp_features:
+            y_abs = df.select(pl.col(targ_col).cast(pl.Float64).abs().median()).item()
+            if isinstance(y_abs, (int, float)) and float(y_abs) > 0.0 and np.isfinite(float(y_abs)):
+                scale_for_exp = float(y_abs)
 
         # таргет y(t+h) и метка valid по будущему
         if sid_col:
             df = df.with_columns(
                 pl.col(targ_col).shift(-h).over(sid_col).alias('_y'),
-                pl.col('_is_valid_raw').shift(-h).over(sid_col).fill_null(False).cast(pl.Boolean).alias('_is_valid_example'),
+                pl.col('_is_valid_raw')
+                .shift(-h)
+                .over(sid_col)
+                .fill_null(False)
+                .cast(pl.Boolean)
+                .alias('_is_valid_example'),
             )
         else:
             df = df.with_columns(
                 pl.col(targ_col).shift(-h).alias('_y'),
-                pl.col('_is_valid_raw').shift(-h).fill_null(False).cast(pl.Boolean).alias('_is_valid_example'),
+                pl.col('_is_valid_raw').shift(-h).fill_null(False).cast(pl.Boolean).alias(
+                    '_is_valid_example'
+                ),
             )
 
         feature_cols: list[str] = []
@@ -166,6 +292,34 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
                 expr = expr.over(sid_col)
             df = df.with_columns(expr.alias(name))
             feature_cols.append(name)
+
+        
+        # логарифмовые/экспоненциальные преобразования признаков
+        # добавляем только если ряд выглядит как экспонента
+        if use_exp_features:
+            base_for_transform = [
+                c
+                for c in feature_cols
+                if c.startswith('lag_')
+                or c.startswith('diff_')
+                or c.startswith('rolling_mean_')
+                or c.startswith('rolling_std_')
+                or c.startswith('rolling_min_')
+                or c.startswith('rolling_max_')
+            ]
+
+            extra_cols: list[str] = []
+            exprs: list[pl.Expr] = []
+            for base_col in base_for_transform:
+                log_name = f'{base_col}_log1p'
+                exp_name = f'{base_col}_exp'
+
+                exprs.append(_signed_log1p(pl.col(base_col)).alias(log_name))
+                exprs.append(_exp_scaled(pl.col(base_col), scale_for_exp).alias(exp_name))
+                extra_cols.extend([log_name, exp_name])
+
+            df = df.with_columns(exprs)
+            feature_cols.extend(extra_cols)
 
 
         # экзогены
