@@ -8,6 +8,7 @@ import numpy as np
 from tsfit.application.ports import BuiltDataset, Frame, TimeSeriesDatasetBuilder
 from tsfit.domain.value_objects import DatasetSchemaValueObject, TimeSeriesConfigValueObject
 from tsfit.domain.exceptions import ValidationError
+from tsfit.infrastructure.preprocess.polars_frame import preprocess_frame_for_training
 
 # хелперы для проверки распределения
 
@@ -52,7 +53,7 @@ def _is_exponential_series(y: np.ndarray) -> bool:
     mean_r = float(np.mean(ratios))
     std_r = float(np.std(ratios, ddof=0))
 
-    # если средний множитель почти 1, это не экспонента, а почти константа
+    # если средний множитель почти 1 то это не экспонента, а почти константа
     if abs(mean_r - 1.0) < 0.01:
         return False
 
@@ -149,6 +150,15 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
                 _ = df.select(pl.col(ts_col).dt.year()).head(1)
             except Exception as e:
                 raise ValidationError(f'timestamp_col должен быть Datetime (после парсинга). Ошибка: {e}')
+
+        # препроцессинг: чистка y/x и ffill экзогенов
+        df = preprocess_frame_for_training(
+            df=df,
+            ts_col=ts_col,
+            target_col=targ_col,
+            exog_cols=schema.exogenous_cols,
+            series_id_col=sid_col,
+        )
             
 
         # разметка сырой валидации
@@ -322,9 +332,10 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
             feature_cols.extend(extra_cols)
 
 
-        # экзогены
+        # экзогены + индикаторы пропусков
         for col in schema.exogenous_cols:
             feature_cols.append(col)
+            feature_cols.append(f'{col}__is_missing')
 
 
         # календарные признаки
@@ -346,8 +357,11 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
             feature_cols.append('series_code')
 
 
-        # фильтрация строк где нельзя построить supervised пример
-        needed = ['_y', *feature_cols]
+        # фильтрация строк где нельзя построить supervised пример.
+        # экзогены могут оставаться null (например в самом начале ряда).
+        # xgboost умеет missing (nan) и это не считается утечкой.
+        nullable_cols = set(schema.exogenous_cols)
+        needed = ['_y', *[c for c in feature_cols if c not in nullable_cols]]
         not_null_exprs: Sequence[pl.Expr] = [pl.col(c).is_not_null() for c in needed]
         df2 = df.filter(pl.all_horizontal(not_null_exprs))
 
