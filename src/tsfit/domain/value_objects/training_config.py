@@ -18,6 +18,9 @@ class TrainingConfig:
 
     early_stopping_rounds: int # сколько итераций без улучшения терпим
     n_estimators_cap: int # потолок числа эстиматоров в ансамбле
+    
+    mape_eps: float = 1e-6 # эпсилон
+    mape_zero_frac_threshold: float = 0.02 # порог для smape
 
     def validate(self) -> None: # проверка инвариантов
         if not self.primary_metric:
@@ -36,6 +39,10 @@ class TrainingConfig:
         model_params: dict[str, float | int | str | bool] | None,
         early_stopping_rounds: int = 50,
         n_estimators_cap: int = 2000,
+        mape_eps = 1e-6, # дефолты
+        mape_zero_frac_threshold = 0.02, # дефлоты
+        
+
     ) -> 'TrainingConfig':
         '''
         Фабрика класса. Проверяет доменные инварианты перед созданием экземпляра
@@ -46,6 +53,8 @@ class TrainingConfig:
             model_params=dict(model_params or {}),
             early_stopping_rounds=early_stopping_rounds,
             n_estimators_cap=n_estimators_cap,
+            mape_eps = mape_eps,
+            mape_zero_frac_threshold = mape_zero_frac_threshold,
         )
         obj.validate()
         return obj
