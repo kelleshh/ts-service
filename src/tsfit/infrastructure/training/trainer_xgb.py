@@ -36,32 +36,63 @@ class XGBModelTrainer(ModelTrainer):
             **params,
             eval_metric=list(training.metrics))
         
-        model.fit(X_train, y_train, eval_set=[(X_valid, y_valid)], verbose=False)
-
-        # достает метрики на лучшей итерации
+        # метрики считаем и на train, и на valid
+        #
+        # в evals_result() XGBoost именует наборы как validation_0, validation_1, ...
+        # Поэтому порядок важен:
+        # validation_0 -> train
+        # validation_1 -> valid
+        model.fit(
+            X_train,
+            y_train,
+            eval_set=[(X_train, y_train), (X_valid, y_valid)],
+            verbose=False,
+        )
 
         evals_result = model.evals_result()
-        valid_name = 'validation_0'
-        if valid_name not in evals_result:
-            raise ValueError('XGBoost не вернул evals_result для validation_0')
 
+        train_name = 'validation_0'
+        valid_name = 'validation_1'
+        if train_name not in evals_result:
+            raise ValueError('XGBoost не вернул evals_result для validation_0 (train)')
+        if valid_name not in evals_result:
+            raise ValueError('XGBoost не вернул evals_result для validation_1 (valid)')
+
+        train_metrics = evals_result[train_name]
         valid_metrics = evals_result[valid_name]
+
         metrics: dict[str, float] = {}
         for requested in training.metrics:
             if requested not in valid_metrics:
-                # Иногда XGBoost может переименовать ключ (редко)
-                # но в этом случае проще явно сообщить об ошибке
                 known = sorted(valid_metrics.keys())
                 raise ValueError(
-                    f'XGBoost не вернул метрику {requested}. Доступно: {known}'
+                    f'XGBoost не вернул метрику {requested} на valid. Доступно: {known}'
                 )
-            series = valid_metrics[requested]
-            if not series:
-                raise ValueError(f'Пустая история значений метрики {requested}')
-            
+            if requested not in train_metrics:
+                known = sorted(train_metrics.keys())
+                raise ValueError(
+                    f'XGBoost не вернул метрику {requested} на train. Доступно: {known}'
+                )
+
+            valid_series = valid_metrics[requested]
+            train_series = train_metrics[requested]
+            if not valid_series:
+                raise ValueError(f'Пустая история значений метрики {requested} на valid')
+            if not train_series:
+                raise ValueError(f'Пустая история значений метрики {requested} на train')
+
             best_i = getattr(model, 'best_iteration', None)
             idx = int(best_i) if best_i is not None else -1
-            metrics[requested] = float(series[idx])
+
+            # На всякий случай: если best_iteration почему-то выходит за границы
+            if idx != -1:
+                idx = min(idx, len(valid_series) - 1, len(train_series) - 1)
+
+            # Контракт:
+            # - 'rmse' -> valid
+            # - 'rmse_train' -> train
+            metrics[requested] = float(valid_series[idx])
+            metrics[f'{requested}_train'] = float(train_series[idx])
 
         # importance (топ-50 фичей)
         feature_importance: dict[str, float] = {}
