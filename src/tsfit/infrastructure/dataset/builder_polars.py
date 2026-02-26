@@ -32,13 +32,15 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
         df = frame.clone()
         n_rows_raw = int(df.height) # сырые строки сразу считаются до препроцессинга
 
-        # ожидается что timestamp уже стал datetime от парсера
+
+        # ожидается что timestamp уже стал datetime
         if df.schema.get(ts_col) not in (pl.Datetime, pl.Datetime(time_zone='UTC'), pl.Datetime(time_unit='us', time_zone='UTC')):
             try:
                 _ = df.select(pl.col(ts_col).dt.year()).head(1)
             except Exception as e:
                 raise ValidationError(f'timestamp_col должен быть Datetime (после парсинга). Ошибка: {e}')
             
+
         # разметка сырой валидации
         if sid_col:
             # колонки индексов внутри серии и длина серии
@@ -83,6 +85,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
         if max_hist >= (min_len - h):
             raise ValidationError('Слишком большая глубина истории (lags/rolling/diff) для min_len и horizon')
 
+
         # таргет y(t+h) и метка valid по будущему
         if sid_col:
             df = df.with_columns(
@@ -97,6 +100,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
 
         feature_cols: list[str] = []
 
+
         # лаги
         for lag in lags:
             name = f'lag_{lag}'
@@ -105,6 +109,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
                 expr = expr.over(sid_col)
             df = df.with_columns(expr.alias(name))
             feature_cols.append(name)
+
 
         # разности (y(t) - y(t-lag))
         for lag in diff_lags:
@@ -115,6 +120,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
                 shifted = shifted.over(sid_col)
             df = df.with_columns((base - shifted).alias(name))
             feature_cols.append(name)
+
 
         # rolling-статистики по прошлому (shift(1) чтобы не учитывать текущий y)
         def _rolling(expr: pl.Expr, win: int, fn: str) -> pl.Expr:
@@ -161,9 +167,11 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
             df = df.with_columns(expr.alias(name))
             feature_cols.append(name)
 
+
         # экзогены
         for col in schema.exogenous_cols:
             feature_cols.append(col)
+
 
         # календарные признаки
         df = df.with_columns(
@@ -171,6 +179,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
             pl.col(ts_col).dt.month().cast(pl.Int16).alias('month'),
         )
         feature_cols += ['dow', 'month']
+
 
         # числовой код серии
         if sid_col:
@@ -181,6 +190,7 @@ class PolarsTimeSeriesDatasetBuilder(TimeSeriesDatasetBuilder):
                 pl.col(sid_col).map_elements(mapping.get, return_dtype=pl.Int32).alias('series_code')
             )
             feature_cols.append('series_code')
+
 
         # фильтрация строк где нельзя построить supervised пример
         needed = ['_y', *feature_cols]

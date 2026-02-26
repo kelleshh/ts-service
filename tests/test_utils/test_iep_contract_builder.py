@@ -1,6 +1,6 @@
 import pytest
 
-from utils.iep_contract_builder import build_fit_request_payload, ContractBuildError
+from scripts.utils.iep_contract_builder import build_fit_request_payload, ContractBuildError
 
 
 def test_build_fit_payload_single_value_column() -> None:

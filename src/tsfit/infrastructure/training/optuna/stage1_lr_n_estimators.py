@@ -174,7 +174,7 @@ def pick_learning_rate_and_n_estimators(
             raise ValueError(f'Модель не вернула метрику {primary_metric}. Доступно: {known}')
 
         series = valid_metrics[primary_metric]
-        best_idx, best_val = pick_best(series, higher_is_better=higher)
+        best_idx, best_val = pick_best(series, higher_is_better=higher) # выбираем лучшую итерацию и метрику там (которая главная метрика)
 
         candidates.append(
             {
