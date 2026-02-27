@@ -19,7 +19,6 @@ def _normalize_params(model_params: dict[str, object]) -> dict[str, object]:
     p.setdefault('objective', 'reg:squarederror')
     p.setdefault('tree_method', 'hist')
     p.setdefault('max_depth', 6)
-    p.setdefault('learning_rate', 0.05)
     p.setdefault('subsample', 0.8)
     p.setdefault('colsample_bytree', 0.8)
     p.setdefault('min_child_weight', 1.0)
@@ -28,12 +27,18 @@ def _normalize_params(model_params: dict[str, object]) -> dict[str, object]:
     p.setdefault('gamma', 0.0)
     p.setdefault('seed', 42)
 
-    lr = float(p.pop('learning_rate')) if 'learning_rate' in p else float(p.get('eta', 0.05))  # type: ignore
+    # learning_rate и eta это синонимы поэтому ставим просто eta
+    if 'eta' in p:
+        lr = float(p['eta'])  # type: ignore
+    elif 'learning_rate' in p:
+        lr = float(p['learning_rate'])  # type: ignore
+    else:
+        lr = 0.05
     p['eta'] = lr
+    p.pop('learning_rate', None)
 
     # xgboost train не любит лишние ключи
-    if 'n_estimators' in p:
-        p.pop('n_estimators')
+    p.pop('n_estimators', None)
 
     return p
 
@@ -45,6 +50,13 @@ def _make_feval(metric: str, *, eps: float):
         return metric, float(out[metric])
 
     return feval
+
+
+def _time_weights(n: int) -> np.ndarray:
+    # мягкое усиление веса последних точек (полезно для дата дрифта)
+    if n <= 1:
+        return np.ones((n,), dtype='float64')
+    return np.linspace(0.3, 1.0, n, dtype='float64')
 
 
 # Adapter (Infrastructure)
@@ -59,12 +71,19 @@ class XGBoostTrainer(ModelTrainer):
     ) -> TrainingReport:
         params = _normalize_params(config.model_params)
 
+        if config.primary_metric not in ('rmse', 'mae'):
+            params['disable_default_eval_metric'] = 1
+        else:
+            params['eval_metric'] = config.primary_metric
+
         fold_train_metrics: list[dict[str, float]] = []
         fold_valid_metrics: list[dict[str, float]] = []
         best_iters: list[int] = []
 
         for train_sd, valid_sd in folds:
-            dtrain = xgb.DMatrix(train_sd.x, label=train_sd.y, feature_names=list(feature_names))
+            w_train = _time_weights(int(train_sd.n_rows))
+
+            dtrain = xgb.DMatrix(train_sd.x, label=train_sd.y, feature_names=list(feature_names), weight=w_train)
             dvalid = xgb.DMatrix(valid_sd.x, label=valid_sd.y, feature_names=list(feature_names))
 
             booster = xgb.train(
@@ -83,9 +102,13 @@ class XGBoostTrainer(ModelTrainer):
 
             yhat_train = booster.predict(dtrain, iteration_range=(0, best_it + 1))
             yhat_valid = booster.predict(dvalid, iteration_range=(0, best_it + 1))
+            # считаем трейн метрики сопоставимыми с vaild
+            tail = int(valid_sd.n_rows)
+            y_true_train = train_sd.y[-tail:] # type: ignore
+            y_pred_train = yhat_train[-tail:]
 
             fold_train_metrics.append(
-                compute_all(metrics=list(config.metrics), y_true=train_sd.y, y_pred=yhat_train, eps=config.mape_eps) # type: ignore
+                compute_all(metrics=list(config.metrics), y_true=y_true_train, y_pred=y_pred_train, eps=config.mape_eps)
             )
             fold_valid_metrics.append(
                 compute_all(metrics=list(config.metrics), y_true=valid_sd.y, y_pred=yhat_valid, eps=config.mape_eps) # type: ignore
@@ -104,7 +127,8 @@ class XGBoostTrainer(ModelTrainer):
         best_n = max(1, min(best_n, int(config.n_estimators_cap)))
 
         # финальная модель на всём датасете
-        dfull = xgb.DMatrix(full.x, label=full.y, feature_names=list(feature_names))
+        w_full = _time_weights(int(full.n_rows))
+        dfull = xgb.DMatrix(full.x, label=full.y, feature_names=list(feature_names), weight=w_full)
         final = xgb.train(
             params=params,
             dtrain=dfull,
@@ -114,7 +138,7 @@ class XGBoostTrainer(ModelTrainer):
         )
 
         gain = final.get_score(importance_type='gain')
-        fi: dict[str, float] = {name: float(gain.get(name, 0.0)) for name in feature_names}
+        fi: dict[str, float] = {name: float(gain.get(name, 0.0)) for name in feature_names} # type: ignore
 
         report = TrainingReport(
             model=final,
