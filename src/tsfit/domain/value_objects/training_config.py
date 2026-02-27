@@ -36,7 +36,7 @@ class TrainingConfig:
     def make(
         primary_metric: str,
         metrics: tuple[str, ...],
-        model_params: dict[str, float | int | str | bool] | None,
+        model_params: dict | None,
         early_stopping_rounds: int = 50,
         n_estimators_cap: int = 2000,
         mape_eps = 1e-6, # дефолты
