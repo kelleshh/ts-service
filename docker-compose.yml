@@ -1,0 +1,40 @@
+services:
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tsfit-mlflow
+    command: >
+      sh -c "mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --allowed-hosts 'mlflow,localhost,127.0.0.1'
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root file:/mlflow/artifacts"
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tsfit-api
+    command: ["uvicorn", "tsfit.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      TSFIT_REGISTRY: "mlflow"
+      TSFIT_MLFLOW_EXPERIMENT: "tsfit"
+      # ВАЖНО: из контейнера "localhost:5000" не видит другой контейнер.
+      # Поэтому тут используем имя сервиса.
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mlflow
+    volumes:
+      # чтобы клиент мог читать artifacts по file:/mlflow/... (если ты это используешь)
+      - mlflow_data:/mlflow:ro
+
+volumes:
+  mlflow_data:
