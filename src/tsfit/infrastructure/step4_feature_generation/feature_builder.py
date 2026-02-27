@@ -132,13 +132,9 @@ class PandasFeatureBuilder(FeatureBuilder):
         y = feats[schema.target_col].astype('float64')
         y_fut = y.shift(-horizon)
 
-        # таргет + трансформация
-        if plan.add_exp_features:
-            feats[_TARGET_COL] = np.log1p(np.clip(y_fut, 0.0, None))
-            feats.attrs['target_transform'] = 'log1p'
-        else:
-            feats[_TARGET_COL] = y_fut
-            feats.attrs['target_transform'] = 'identity'
+        # таргет
+        feats[_TARGET_COL] = y_fut
+        feats.attrs['target_transform'] = 'identity'
 
         # убираем строки без целевого (будущего)
         feats = feats.dropna(subset=[_TARGET_COL])
