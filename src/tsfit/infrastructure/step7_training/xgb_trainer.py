@@ -59,6 +59,22 @@ def _time_weights(n: int) -> np.ndarray:
     return np.linspace(0.3, 1.0, n, dtype='float64')
 
 
+_BUILTIN_PRIMARY_METRICS = {'rmse', 'mae'}
+
+
+def _prepare_eval(primary_metric: str, *, mape_eps: float) -> tuple[dict[str, object], object | None, bool]:
+    params_update: dict[str, object] = {}
+    custom_metric: object | None = None
+
+    if primary_metric in _BUILTIN_PRIMARY_METRICS:
+        params_update['eval_metric'] = primary_metric
+    else:
+        params_update['disable_default_eval_metric'] = 1
+        custom_metric = _make_feval(primary_metric, eps=mape_eps)
+
+    return params_update, custom_metric, False
+
+
 # Adapter (Infrastructure)
 class XGBoostTrainer(ModelTrainer):
     def train_with_walk_forward(
@@ -70,11 +86,8 @@ class XGBoostTrainer(ModelTrainer):
         config: TrainingConfig,
     ) -> TrainingReport:
         params = _normalize_params(config.model_params)
-
-        if config.primary_metric not in ('rmse', 'mae'):
-            params['disable_default_eval_metric'] = 1
-        else:
-            params['eval_metric'] = config.primary_metric
+        eval_update, custom_metric, maximize = _prepare_eval(config.primary_metric, mape_eps=config.mape_eps)
+        params.update(eval_update)
 
         fold_train_metrics: list[dict[str, float]] = []
         fold_valid_metrics: list[dict[str, float]] = []
@@ -93,8 +106,8 @@ class XGBoostTrainer(ModelTrainer):
                 evals=[(dtrain, 'train'), (dvalid, 'valid')],
                 early_stopping_rounds=int(config.early_stopping_rounds),
                 verbose_eval=False,
-                custom_metric=_make_feval(config.primary_metric, eps=config.mape_eps),
-                maximize=False,
+                custom_metric=custom_metric,
+                maximize=maximize,
             )
 
             best_it = int(getattr(booster, 'best_iteration', config.n_estimators_cap - 1))
