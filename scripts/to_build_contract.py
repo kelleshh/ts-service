@@ -44,7 +44,6 @@ contract = build_fit_request_payload(
             'max_depth': 6,
             'subsample': 0.8,
             'colsample_bytree': 0.7,
-            'random_state': 42,
         },
         'early_stopping_rounds': 50,
         'n_estimators_cap': 2000,

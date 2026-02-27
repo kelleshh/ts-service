@@ -11187,23 +11187,23 @@
     "target_col": "y",
     "exog_cols": []
   },
-  "horizon": 1,
+  "horizon": 24,
   "training": {
-    "primary_metric": "rmse",
+    "primary_metric": "mape",
     "metrics": [
       "rmse",
       "mae",
       "mape"
     ],
     "model_params": {
-      "n_estimators": 300,
+      "n_estimators": 120,
       "learning_rate": 0.04,
       "max_depth": 6,
       "subsample": 0.8,
       "colsample_bytree": 0.7,
       "random_state": 42
     },
-    "early_stopping_rounds": 50,
-    "n_estimators_cap": 2000
+    "early_stopping_rounds": 20,
+    "n_estimators_cap": 240
   }
 }
