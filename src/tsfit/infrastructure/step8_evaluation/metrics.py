@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from tsfit.domain.exceptions import TrainingError
+
 
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     e = y_true - y_pred
@@ -40,5 +42,5 @@ def compute_all(
         elif m == 'smape':
             out[m] = smape(y_true, y_pred, eps=eps)
         else:
-            raise ValueError(f'неизвестная метрика: {m}')
+            raise TrainingError(f'неизвестная метрика: {m}')
     return out

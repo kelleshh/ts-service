@@ -9,7 +9,7 @@ from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from tsfit.application.usecases.train_model import TrainModelUseCase
 from tsfit.application.usecases.train_model_auto import TrainModelAutoUseCase
 from tsfit.application.usecases.commands import FitAutoCommand, FitCommand
-from tsfit.domain.exceptions import ConflictError, ValidationError, InvariantError, NotFoundError
+from tsfit.domain.exceptions import ConflictError, ValidationError, InvariantError, NotFoundError, TrainingError
 
 from tsfit.presentation.training.schemas import (
     FitRequest, FitResponse,
@@ -49,7 +49,7 @@ async def fit(
         response.status_code = s.HTTP_201_CREATED if result.created else s.HTTP_200_OK
         return FitResponse(model_id=result.model_id, created=result.created, summary=dict(result.summary))
     
-    except ValidationError as e:
+    except (ValidationError, TrainingError) as e:
         raise HTTPException(status_code=s.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
     except (InvariantError, ConflictError) as e:
         raise HTTPException(status_code=s.HTTP_409_CONFLICT, detail=str(e))
@@ -84,7 +84,7 @@ async def fit_auto(
         response.status_code = s.HTTP_201_CREATED if result.created else s.HTTP_200_OK
         return FitAutoResponse(model_id=result.model_id, created=result.created, summary=dict(result.summary))
 
-    except ValidationError as e:
+    except (ValidationError, TrainingError) as e:
         raise HTTPException(status_code=s.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
     except (InvariantError, ConflictError) as e:
         raise HTTPException(status_code=s.HTTP_409_CONFLICT, detail=str(e))

@@ -208,3 +208,6 @@ __marimo__/
 
 # databases
 *.db
+
+# MlFlow
+mlruns/

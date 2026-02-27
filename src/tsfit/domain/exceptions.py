@@ -19,3 +19,6 @@ class ConflictError(DomainError):
 
 class NotFoundError(DomainError):
     '''Не найден ресурс (например model_id)'''
+
+class TrainingError(DomainError):
+    '''Ошибка процесса обучения'''
