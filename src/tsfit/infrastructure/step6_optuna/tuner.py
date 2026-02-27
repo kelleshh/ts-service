@@ -5,15 +5,14 @@ import statistics
 import numpy as np
 import xgboost as xgb
 
-from tsfit.domain.value_objects.meta import ModelMeta
 from tsfit.application.ports import ModelTuner
 from tsfit.application.results import MetricsAgg, MetricsReport, TrainingReport
-from tsfit.domain.exceptions import ValidationError
 from tsfit.domain.value_objects import CVPlan, DatasetSchema, FeaturePlan, TrainingConfig
-from tsfit.infrastructure.step5_cross_validation.walk_forward import DefaultWalkForwardSplitter
-from tsfit.infrastructure.step8_evaluation.metrics import compute_all
 from tsfit.infrastructure.step4_feature_generation.feature_builder import PandasFeatureBuilder
-from tsfit.infrastructure.step7_training.xgb_trainer import _normalize_params
+from tsfit.infrastructure.step5_cross_validation.walk_forward import DefaultWalkForwardSplitter
+from tsfit.infrastructure.step7_training.xgb_trainer import _normalize_params, _time_weights
+from tsfit.infrastructure.step8_evaluation.metrics import compute_all
+from tsfit.infrastructure.step7_training.xgb_trainer import _make_feval
 
 
 # Adapter (Infrastructure)
@@ -26,17 +25,17 @@ class OptunaTuner(ModelTuner):
         self,
         supervised,
         schema: DatasetSchema,
-        feature_plan: FeaturePlan, # он, кажется тут не нужен
+        feature_plan: FeaturePlan,  # feature_plan/horizon сохраняем в сигнатуре порта
         cv_plan: CVPlan,
         config: TrainingConfig,
         *,
-        horizon: int,# он, кажется тут не нужен
+        horizon: int,
         n_trials: int,
         timeout_sec: int | None,
     ) -> TrainingReport:
         try:
             import optuna
-        except Exception as e:  # pragma: no cover
+        except Exception as e:
             raise RuntimeError('optuna не установлен') from e
 
         full_sd = self._fb.split_xy(supervised, schema)
@@ -48,17 +47,27 @@ class OptunaTuner(ModelTuner):
 
         def objective(trial: 'optuna.Trial') -> float:
             params = dict(base)
-            params['max_depth'] = trial.suggest_int('max_depth', 3, 12)
-            params['min_child_weight'] = trial.suggest_float('min_child_weight', 0.1, 10.0, log=True)
-            params['subsample'] = trial.suggest_float('subsample', 0.5, 1.0)
-            params['colsample_bytree'] = trial.suggest_float('colsample_bytree', 0.5, 1.0)
-            params['reg_alpha'] = trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True)
-            params['reg_lambda'] = trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True)
-            params['eta'] = trial.suggest_float('eta', 0.01, 0.2, log=True)
+            params['max_depth'] = trial.suggest_int('max_depth', 2, 6)
+            params['min_child_weight'] = trial.suggest_float('min_child_weight', 1.0, 30.0, log=True)
+            params['subsample'] = trial.suggest_float('subsample', 0.6, 1.0)
+            params['colsample_bytree'] = trial.suggest_float('colsample_bytree', 0.3, 1.0)
+            params['reg_alpha'] = trial.suggest_float('reg_alpha', 1e-2, 5.0, log=True)
+            params['reg_lambda'] = trial.suggest_float('reg_lambda', 1e-2, 10.0, log=True)
+            params['gamma'] = trial.suggest_float('gamma', 0.0, 5.0)
+            params['eta'] = trial.suggest_float('eta', 0.01, 0.1, log=True)
+            params['max_delta_step'] = trial.suggest_float('max_delta_step', 0.0, 10.0)
+
+            # ранний стоп - по основной метрике, если XGBoost ее знает.
+            if config.primary_metric in ('rmse', 'mae'):
+                params['eval_metric'] = config.primary_metric
+            else:
+                params['disable_default_eval_metric'] = 1
 
             vals: list[float] = []
             for train_sd, valid_sd in folds:
-                dtrain = xgb.DMatrix(train_sd.x, label=train_sd.y, feature_names=list(feature_names))
+                w_train = _time_weights(int(train_sd.n_rows))
+
+                dtrain = xgb.DMatrix(train_sd.x, label=train_sd.y, feature_names=list(feature_names), weight=w_train)
                 dvalid = xgb.DMatrix(valid_sd.x, label=valid_sd.y, feature_names=list(feature_names))
 
                 booster = xgb.train(
@@ -67,6 +76,7 @@ class OptunaTuner(ModelTuner):
                     num_boost_round=int(config.n_estimators_cap),
                     evals=[(dvalid, 'valid')],
                     early_stopping_rounds=int(config.early_stopping_rounds),
+                    custom_metric=_make_feval(config.primary_metric, eps=config.mape_eps),
                     verbose_eval=False,
                 )
 
@@ -88,13 +98,20 @@ class OptunaTuner(ModelTuner):
         best_params = dict(base)
         best_params.update(study.best_params)
 
+        if config.primary_metric in ('rmse', 'mae'):
+            best_params['eval_metric'] = config.primary_metric
+        else:
+            best_params['disable_default_eval_metric'] = 1
+
         # теперь финально обучаем как обычный trainer
         fold_train_metrics: list[dict[str, float]] = []
         fold_valid_metrics: list[dict[str, float]] = []
         best_iters: list[int] = []
 
         for train_sd, valid_sd in folds:
-            dtrain = xgb.DMatrix(train_sd.x, label=train_sd.y, feature_names=list(feature_names))
+            w_train = _time_weights(int(train_sd.n_rows))
+
+            dtrain = xgb.DMatrix(train_sd.x, label=train_sd.y, feature_names=list(feature_names), weight=w_train)
             dvalid = xgb.DMatrix(valid_sd.x, label=valid_sd.y, feature_names=list(feature_names))
 
             booster = xgb.train(
@@ -103,6 +120,7 @@ class OptunaTuner(ModelTuner):
                 num_boost_round=int(config.n_estimators_cap),
                 evals=[(dtrain, 'train'), (dvalid, 'valid')],
                 early_stopping_rounds=int(config.early_stopping_rounds),
+                custom_metric=_make_feval(config.primary_metric, eps=config.mape_eps),
                 verbose_eval=False,
             )
 
@@ -112,8 +130,12 @@ class OptunaTuner(ModelTuner):
             yhat_train = booster.predict(dtrain, iteration_range=(0, best_it + 1))
             yhat_valid = booster.predict(dvalid, iteration_range=(0, best_it + 1))
 
+            tail = int(valid_sd.n_rows)
+            y_true_train = train_sd.y[-tail:] # type: ignore
+            y_pred_train = yhat_train[-tail:]
+
             fold_train_metrics.append(
-                compute_all(metrics=list(config.metrics), y_true=train_sd.y, y_pred=yhat_train, eps=config.mape_eps) # type: ignore
+                compute_all(metrics=list(config.metrics), y_true=y_true_train, y_pred=y_pred_train, eps=config.mape_eps)
             )
             fold_valid_metrics.append(
                 compute_all(metrics=list(config.metrics), y_true=valid_sd.y, y_pred=yhat_valid, eps=config.mape_eps) # type: ignore
@@ -130,7 +152,8 @@ class OptunaTuner(ModelTuner):
         best_n = int(statistics.median(best_iters))
         best_n = max(1, min(best_n, int(config.n_estimators_cap)))
 
-        dfull = xgb.DMatrix(full_sd.x, label=full_sd.y, feature_names=list(feature_names))
+        w_full = _time_weights(int(full_sd.n_rows))
+        dfull = xgb.DMatrix(full_sd.x, label=full_sd.y, feature_names=list(feature_names), weight=w_full)
         final = xgb.train(
             params=best_params,
             dtrain=dfull,
@@ -140,7 +163,7 @@ class OptunaTuner(ModelTuner):
         )
 
         gain = final.get_score(importance_type='gain')
-        fi: dict[str, float] = {name: float(gain.get(name, 0.0)) for name in feature_names}
+        fi: dict[str, float] = {name: float(gain.get(name, 0.0)) for name in feature_names} # type: ignore
 
         tuning_report = {
             'n_trials': int(n_trials),
