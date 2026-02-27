@@ -74,7 +74,7 @@ class XGBoostTrainer(ModelTrainer):
                 evals=[(dtrain, 'train'), (dvalid, 'valid')],
                 early_stopping_rounds=int(config.early_stopping_rounds),
                 verbose_eval=False,
-                feval=_make_feval(config.primary_metric, eps=config.mape_eps),
+                custom_metric=_make_feval(config.primary_metric, eps=config.mape_eps),
                 maximize=False,
             )
 
