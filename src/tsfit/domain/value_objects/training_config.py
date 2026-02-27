@@ -14,7 +14,7 @@ class TrainingConfig:
     '''
     primary_metric: str # какую метрику оптимизируем
     metrics: tuple[str, ...] # какие метрики считаем и лоигруем
-    model_params: dict[str, float | int | str | bool] # гиперпараметры
+    model_params: dict # гиперпараметры
 
     early_stopping_rounds: int # сколько итераций без улучшения терпим
     n_estimators_cap: int # потолок числа эстиматоров в ансамбле
