@@ -21,8 +21,8 @@ class FitCommand:
 
 
 # Value Object
+@dataclass(frozen=True, slots=True)
 class FitAutoCommand(FitCommand):
-    
     n_trials: int
     timeout_sec: int | None
 

@@ -15,6 +15,7 @@ from tsfit.presentation.predict.schemas import (
 
 from tsfit.domain.exceptions import ConflictError, ValidationError, InvariantError, NotFoundError
 
+from starlette.concurrency import run_in_threadpool
 
 
 
@@ -29,7 +30,7 @@ async def predict(
 ) -> PredictResponse:
     try:
         cmd = PredictCommand(model_id=req.model_id, rows=req.dataset)
-        result = uc.execute(cmd)
+        result = await run_in_threadpool(uc.execute, cmd)
         response.status_code = s.HTTP_200_OK
         return PredictResponse(prediction=float(result.prediction))
     

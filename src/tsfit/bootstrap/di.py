@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 try:
-    from dishka import Provider, Scope, make_container, provide
+    from dishka import Provider, Scope, make_async_container, provide
     from dishka.integrations.fastapi import FastapiProvider
 except Exception as e:
     raise RuntimeError('Dishka не установлена') from e
@@ -160,4 +160,4 @@ class AppProvider(Provider):
         )
 
 
-container = make_container(AppProvider(), FastapiProvider())
+container = make_async_container(AppProvider(), FastapiProvider())

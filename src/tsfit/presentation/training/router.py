@@ -15,6 +15,7 @@ from tsfit.presentation.training.schemas import (
     FitRequest, FitResponse,
     FitAutoRequest, FitAutoResponse,
 )
+from starlette.concurrency import run_in_threadpool
 
 
 
@@ -44,7 +45,7 @@ async def fit(
             n_estimators_cap=req.training.n_estimators_cap,
         )
 
-        result = uc.execute(cmd)
+        result = await run_in_threadpool(uc.execute, cmd)
         response.status_code = s.HTTP_201_CREATED if result.created else s.HTTP_200_OK
         return FitResponse(model_id=result.model_id, created=result.created, summary=dict(result.summary))
     
@@ -74,9 +75,12 @@ async def fit_auto(
         model_params=req.training.model_params,
         early_stopping_rounds=req.training.early_stopping_rounds,
         n_estimators_cap=req.training.n_estimators_cap,
+        n_trials=req.tuning.n_trials,
+        timeout_sec=req.tuning.timeout_sec
+
         )
 
-        result = uc.execute(cmd)
+        result = await run_in_threadpool(uc.execute, cmd)
         response.status_code = s.HTTP_201_CREATED if result.created else s.HTTP_200_OK
         return FitAutoResponse(model_id=result.model_id, created=result.created, summary=dict(result.summary))
 
