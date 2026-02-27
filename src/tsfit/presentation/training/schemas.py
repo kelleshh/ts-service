@@ -1,6 +1,6 @@
 from typing import Any
 from pydantic import Field
-from presentation.apimodel import APIModel
+from tsfit.presentation.apimodel import APIModel
 
 
 # DTO-шки
