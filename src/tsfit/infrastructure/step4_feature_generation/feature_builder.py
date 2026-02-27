@@ -11,7 +11,7 @@ from tsfit.domain.exceptions import ValidationError
 from tsfit.domain.value_objects import DatasetSchema, FeaturePlan
 
 
-_TARGET_COL = '__tsfit_target'
+_TARGET_COL = 'tsfit_target'
 
 
 def _ensure_df(ds: DatasetHandle) -> pd.DataFrame:
@@ -21,7 +21,11 @@ def _ensure_df(ds: DatasetHandle) -> pd.DataFrame:
     return df
 
 
-def _build_features(df: pd.DataFrame, schema: DatasetSchema, plan: FeaturePlan) -> tuple[pd.DataFrame, list[str]]:
+def _build_features(
+    df: pd.DataFrame,
+    schema: DatasetSchema,
+    plan: FeaturePlan,
+) -> tuple[pd.DataFrame, list[str], int]:
     out = df.copy()
 
     # гарантируем порядок по времени
@@ -31,7 +35,8 @@ def _build_features(df: pd.DataFrame, schema: DatasetSchema, plan: FeaturePlan) 
 
     if plan.add_time_index:
         out['t_idx'] = np.arange(len(out), dtype='int64')
-        feature_names.append('t_idx')
+        out['t_idx_coarse'] = (out['t_idx'] // 50).astype('int64')
+        feature_names.append('t_idx_coarse')
 
     if plan.add_delta_t:
         ts = out[schema.timestamp_col]
@@ -39,23 +44,48 @@ def _build_features(df: pd.DataFrame, schema: DatasetSchema, plan: FeaturePlan) 
         out['delta_t'] = dt.astype('float64')
         feature_names.append('delta_t')
 
-    # лаги
+    # лаги: создаём с шагом 10 как и было
     y = out[schema.target_col].astype('float64')
-    for i in range(plan.max_lag):
+    created_lags: list[int] = []
+    for i in range(1, plan.max_lag + 1):
         name = f'y_lag_{i}'
         out[name] = y.shift(i)
         feature_names.append(name)
+        created_lags.append(i)
+
+    if not created_lags:
+        raise ValidationError('не создано ни одного лага: проверь max_lag')
+
+    last_lag_created = max(created_lags)
+
+    if last_lag_created >= 11:
+        out['y_diff_10'] = out['y_lag_1'] - out['y_lag_11']
+        feature_names.append('y_diff_10')
+    if last_lag_created >= 21:
+        out['y_diff_20'] = out['y_lag_1'] - out['y_lag_21']
+        feature_names.append('y_diff_20')
+    if last_lag_created >= 31:
+        out['y_diff_30'] = out['y_lag_1'] - out['y_lag_31']
+        feature_names.append('y_diff_30')
 
     # роллинги по прошлому (строго без текущего)
     y1 = y.shift(1)
     for w in plan.rolling_windows:
         name = f'y_roll_mean_{w}'
-        out[name] = y1.rolling(window=w, min_periods=w).mean()
+        out[name] = y1.rolling(window=w, min_periods=w, center=False).mean()
         feature_names.append(name)
+
+        name_med = f'y_roll_median_{w}'
+        out[name_med] = y1.rolling(window=w, min_periods=w, center=False).median()
+        feature_names.append(name_med)
+
+        name_ewm = f'y_ewm_mean_{w}'
+        out[name_ewm] = y1.ewm(span=w, adjust=False, min_periods=w).mean()
+        feature_names.append(name_ewm)
 
     for w in plan.rolling_std_windows:
         name = f'y_roll_std_{w}'
-        out[name] = y1.rolling(window=w, min_periods=w).std(ddof=0)
+        out[name] = y1.rolling(window=w, min_periods=w, center=False).std(ddof=0)
         feature_names.append(name)
 
     if plan.add_season_sin_cos and plan.season_period is not None and plan.add_time_index:
@@ -66,10 +96,9 @@ def _build_features(df: pd.DataFrame, schema: DatasetSchema, plan: FeaturePlan) 
         feature_names.extend(['season_sin', 'season_cos'])
 
     if plan.add_exp_features:
-        # простая лог-фича от y_lag_0
-        base = out['y_lag_0'].astype('float64')
-        out['y_log1p'] = np.log1p(np.clip(base, 0.0, None))
-        feature_names.append('y_log1p')
+        base = out['y_lag_1'].astype('float64')
+        out['y_log1p_lag_1'] = np.log1p(np.clip(base, 0.0, None))
+        feature_names.append('y_log1p_lag_1')
 
     # экзогены и индикаторы пропусков
     for c in schema.exog_cols:
@@ -82,39 +111,53 @@ def _build_features(df: pd.DataFrame, schema: DatasetSchema, plan: FeaturePlan) 
     for c in feature_names:
         out[c] = pd.to_numeric(out[c], errors='coerce')
 
-    return out, feature_names
+    return out, feature_names, last_lag_created
 
 
-# Adapter (Infrastructure)
 class PandasFeatureBuilder(FeatureBuilder):
-    def build_supervised(self, ds: DatasetHandle, schema: DatasetSchema, plan: FeaturePlan, *, horizon: int) -> DatasetHandle:
+    def build_supervised(
+        self,
+        ds: DatasetHandle,
+        schema: DatasetSchema,
+        plan: FeaturePlan,
+        *,
+        horizon: int,
+    ) -> DatasetHandle:
         if horizon < 1:
             raise ValidationError('horizon должен быть >= 1')
 
         df = _ensure_df(ds)
-        feats, feature_names = _build_features(df, schema, plan)
+        feats, feature_names, last_lag_created = _build_features(df, schema, plan)
 
         y = feats[schema.target_col].astype('float64')
-        feats[_TARGET_COL] = y.shift(-horizon)
+        y_fut = y.shift(-horizon)
 
-        # убираем строки без целевого
+        # таргет + трансформация
+        if plan.add_exp_features:
+            feats[_TARGET_COL] = np.log1p(np.clip(y_fut, 0.0, None))
+            feats.attrs['target_transform'] = 'log1p'
+        else:
+            feats[_TARGET_COL] = y_fut
+            feats.attrs['target_transform'] = 'identity'
+
+        # убираем строки без целевого (будущего)
         feats = feats.dropna(subset=[_TARGET_COL])
 
         # убираем строки, где нет полного лагового окна
-        last_lag = f'y_lag_{plan.max_lag - 1}'
-        feats = feats.dropna(subset=[last_lag])
+        last_lag_col = f'y_lag_{last_lag_created}'
+        feats = feats.dropna(subset=[last_lag_col])
 
         keep_cols = [schema.timestamp_col, _TARGET_COL, *feature_names]
         feats = feats[keep_cols].reset_index(drop=True)
 
         feats.attrs['feature_names'] = feature_names
+        feats.attrs['last_lag_created'] = int(last_lag_created)
         return DatasetHandle(payload=feats)
 
     def split_xy(self, supervised: DatasetHandle, schema: DatasetSchema) -> SupervisedDataset:
         df = _ensure_df(supervised)
         feature_names = df.attrs.get('feature_names')
         if not feature_names:
-            # fallback: все, кроме ts и target
             feature_names = [c for c in df.columns if c not in (schema.timestamp_col, _TARGET_COL)]
 
         x = df[list(feature_names)].to_numpy(dtype='float64', copy=False)
@@ -128,15 +171,20 @@ class PandasFeatureBuilder(FeatureBuilder):
             n_features=int(x.shape[1]),
         )
 
-    def build_last_x(self, ds: DatasetHandle, schema: DatasetSchema, plan: FeaturePlan) -> tuple[object, tuple[str, ...]]:
+    def build_last_x(
+        self,
+        ds: DatasetHandle,
+        schema: DatasetSchema,
+        plan: FeaturePlan,
+    ) -> tuple[object, tuple[str, ...]]:
         df = _ensure_df(ds)
-        feats, feature_names = _build_features(df, schema, plan)
+        feats, feature_names, last_lag_created = _build_features(df, schema, plan)
 
-        last_lag = f'y_lag_{plan.max_lag - 1}'
-        valid_rows = feats[~feats[last_lag].isna()]
+        last_lag_col = f'y_lag_{last_lag_created}'
+        valid_rows = feats[~feats[last_lag_col].isna()]
         if valid_rows.empty:
-            raise ValidationError('недостаточно истории для max_lag')
+            raise ValidationError('недостаточно истории для лагов')
 
-        last = valid_rows.iloc[[-1]]
-        x = last[list(feature_names)].to_numpy(dtype='float64', copy=False)
+        last_row = valid_rows.iloc[[-1]]
+        x = last_row[list(feature_names)].to_numpy(dtype='float64', copy=False)
         return x, tuple(feature_names)

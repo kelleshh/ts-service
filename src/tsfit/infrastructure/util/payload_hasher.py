@@ -19,8 +19,11 @@ class Sha256PayloadHasher(PayloadHasher):
         tuning: dict[str, object] | None, # чтоб работал для обеих режимов обучения
         policy_version: str,
     ) -> str:
+        
+        rows_sorted = sorted(rows, key=lambda r: str(r.get(schema.timestamp_col, '')))
+        
         payload = {
-            'rows': rows,
+            'rows': rows_sorted,
             'schema': {
                 'timestamp_col': schema.timestamp_col,
                 'target_col': schema.target_col,
