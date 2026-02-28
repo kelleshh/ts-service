@@ -28,7 +28,7 @@ _BAD_STRINGS = {
 def _to_datetime_series(s: pd.Series) -> pd.Series:
     if pd.api.types.is_datetime64_any_dtype(s):
         return s
-    return pd.to_datetime(s, errors='coerce', utc=False)
+    return pd.to_datetime(s, errors='coerce', utc=False, dayfirst=True)
 
 
 def _clean_numeric(s: pd.Series) -> pd.Series:
